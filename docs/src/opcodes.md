@@ -17,7 +17,7 @@ Cycles:     2
 ```
 
 ```rust
-pub fn lda_imm(cpu: &mut CpuRp2A03, bus: &mut Bus<'_>) -> u8 {
+pub fn lda_imm(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) -> u8 {
     let val = bus.read(cpu.pc());         // read the immediate value
     cpu.set_pc(cpu.pc().wrapping_add(1)); // advance past it
     cpu.set_a(val);
@@ -38,7 +38,7 @@ Cycles:     3
 ```
 
 ```rust
-pub fn lda_zp(cpu: &mut CpuRp2A03, bus: &mut Bus<'_>) -> u8 {
+pub fn lda_zp(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) -> u8 {
     let addr = bus.read(cpu.pc()) as u16;  // one byte address
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
@@ -70,7 +70,7 @@ Cycles:     4
 ```
 
 ```rust
-pub fn lda_abs(cpu: &mut CpuRp2A03, bus: &mut Bus<'_>) -> u8 {
+pub fn lda_abs(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) -> u8 {
     let lo = bus.read(cpu.pc()) as u16;
     let hi = bus.read(cpu.pc().wrapping_add(1)) as u16;
     cpu.set_pc(cpu.pc().wrapping_add(2));
@@ -94,7 +94,7 @@ Cycles:     4 (no page cross) or 5 (page cross)
 Page-cross detection in x-nes is branchless:
 
 ```rust
-pub fn absx(cpu: &CpuRp2A03, bus: &mut Bus<'_>) -> (u16, u8) {
+pub fn absx(cpu: &CpuRp2a03, bus: &mut Bus<'_>) -> (u16, u8) {
     let base = abs(cpu, bus);
     let addr = base.wrapping_add(cpu.x() as u16);
     // XOR compares bits 8-15: same page = 0, different = 1
@@ -126,7 +126,7 @@ LDA ($3E, X) where X = $05
 ```
 
 ```rust
-pub fn indx(cpu: &CpuRp2A03, bus: &mut Bus<'_>) -> u16 {
+pub fn indx(cpu: &CpuRp2a03, bus: &mut Bus<'_>) -> u16 {
     let ptr = bus.read(cpu.pc()).wrapping_add(cpu.x()) as u16;
     let lo = bus.read(ptr) as u16;
     let hi = bus.read(ptr.wrapping_add(1)) as u16;
@@ -146,7 +146,7 @@ LDA ($4C), Y where Y = $05
 ```
 
 ```rust
-pub fn indy(cpu: &CpuRp2A03, bus: &mut Bus<'_>) -> (u16, u8) {
+pub fn indy(cpu: &CpuRp2a03, bus: &mut Bus<'_>) -> (u16, u8) {
     let ptr = bus.read(cpu.pc()) as u16;
     let base = bus.read(ptr) as u16 | (bus.read(ptr.wrapping_add(1)) as u16) << 8;
     let addr = base.wrapping_add(cpu.y() as u16);
@@ -310,7 +310,7 @@ result = A + M + C
 In Rust:
 
 ```rust
-fn adc_inner(cpu: &mut CpuRp2A03, operand: u8) {
+fn adc_inner(cpu: &mut CpuRp2a03, operand: u8) {
     let a = cpu.a();
     let carry = cpu.get_flag(FLAG_CARRY) as u16;
     let result = a as u16 + operand as u16 + carry;

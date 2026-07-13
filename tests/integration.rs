@@ -1,13 +1,13 @@
 use nes::bus::Bus;
-use nes::cpu::CpuRp2A03;
+use nes::cpu::CpuRp2a03;
 use nes::rom::Rom;
 use nes::{reset, tick};
 
-fn load_rom(data: &[u8]) -> (CpuRp2A03, Bus<'static>) {
+fn load_rom(data: &[u8]) -> (CpuRp2a03, Bus<'static>) {
     let rom = Rom::new(data).expect("invalid ROM");
     let prg: &'static [u8] = Box::leak(rom.prg.to_vec().into_boxed_slice());
     let chr: &'static [u8] = Box::leak(rom.chr.to_vec().into_boxed_slice());
-    let mut cpu = CpuRp2A03::new(0);
+    let mut cpu = CpuRp2a03::new(0);
     let mut bus = Bus::new(prg, chr, rom.mirroring);
     reset(&mut cpu, &mut bus);
     (cpu, bus)
@@ -15,7 +15,7 @@ fn load_rom(data: &[u8]) -> (CpuRp2A03, Bus<'static>) {
 
 #[test]
 fn cpu_initial_state() {
-    let cpu = CpuRp2A03::new(0x8000);
+    let cpu = CpuRp2a03::new(0x8000);
     assert_eq!(cpu.pc(), 0x8000);
     assert_eq!(cpu.a(), 0);
     assert_eq!(cpu.x(), 0);
@@ -26,7 +26,7 @@ fn cpu_initial_state() {
 
 #[test]
 fn cpu_set_get_registers() {
-    let mut cpu = CpuRp2A03::new(0);
+    let mut cpu = CpuRp2a03::new(0);
     cpu.set_pc(0x1234);
     cpu.set_a(0xAB);
     cpu.set_x(0xCD);
@@ -44,7 +44,7 @@ fn cpu_set_get_registers() {
 #[test]
 fn cpu_flags() {
     use nes::cpu::FLAG_CARRY;
-    let mut cpu = CpuRp2A03::new(0);
+    let mut cpu = CpuRp2a03::new(0);
     assert!(!cpu.get_flag(FLAG_CARRY));
     cpu.set_flag(FLAG_CARRY, true);
     assert!(cpu.get_flag(FLAG_CARRY));
@@ -54,7 +54,7 @@ fn cpu_flags() {
 
 #[test]
 fn cpu_sign_zero_flags() {
-    let mut cpu = CpuRp2A03::new(0);
+    let mut cpu = CpuRp2a03::new(0);
     cpu.set_sign(0x80);
     assert!(cpu.get_flag(nes::cpu::FLAG_NEGATIVE));
     cpu.set_sign(0x7F);
@@ -67,14 +67,14 @@ fn cpu_sign_zero_flags() {
 
 #[test]
 fn cpu_byte_serialization() {
-    let mut cpu = CpuRp2A03::new(0xABCD);
+    let mut cpu = CpuRp2a03::new(0xABCD);
     cpu.set_a(0x12);
     cpu.set_x(0x34);
     cpu.set_y(0x56);
     cpu.set_st(0x78);
     cpu.set_sr(0x9A);
     let bytes = cpu.as_bytes();
-    let restored = CpuRp2A03::from_bytes(bytes);
+    let restored = CpuRp2a03::from_bytes(bytes);
     assert_eq!(restored.pc(), 0xABCD);
     assert_eq!(restored.a(), 0x12);
     assert_eq!(restored.x(), 0x34);

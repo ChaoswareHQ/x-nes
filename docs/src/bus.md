@@ -207,7 +207,7 @@ if bus.poll_nmi() {
 The NMI handler pushes the program counter and status register onto the stack, then loads a new PC from the NMI vector ($FFFA):
 
 ```rust
-pub fn nmi(cpu: &mut CpuRp2A03, bus: &mut Bus<'_>) {
+pub fn nmi(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) {
     crate::ops::push(cpu, bus, (cpu.pc() >> 8) as u8);
     crate::ops::push(cpu, bus, cpu.pc() as u8);
     let sr = cpu.sr() | 0x20;  // set unused bit

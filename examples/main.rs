@@ -1,5 +1,5 @@
 use nes::bus::Bus;
-use nes::cpu::CpuRp2A03;
+use nes::cpu::CpuRp2a03;
 use nes::rom::Rom;
 use nes::{reset, tick};
 
@@ -13,7 +13,7 @@ fn main() {
     let data = std::fs::read(&args[1]).expect("failed to read ROM");
     let rom = Rom::new(&data).expect("invalid iNES ROM");
 
-    let mut cpu = CpuRp2A03::new(0);
+    let mut cpu = CpuRp2a03::new(0);
     let mut bus = Bus::new(&rom.prg, &rom.chr, rom.mirroring);
     reset(&mut cpu, &mut bus);
 

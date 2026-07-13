@@ -28,7 +28,7 @@ The NES is a carefully balanced system where three processors — CPU, PPU, and 
 The heart of the emulator is in `lib.rs`:
 
 ```rust
-pub fn tick(cpu: &mut CpuRp2A03, bus: &mut Bus<'_>) -> u8 {
+pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) -> u8 {
     // 1. Fetch opcode from the address CPU's PC points to
     let opcode = bus.read(cpu.pc());
 

@@ -8,11 +8,11 @@ pub const FLAG_NEGATIVE: u8 = 0b1000_0000;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct CpuRp2A03 {
+pub struct CpuRp2a03 {
     bytes: [u8; 7],
 }
 
-impl CpuRp2A03 {
+impl CpuRp2a03 {
     pub fn new(reset_addr: u16) -> Self {
         let mut cpu = Self { bytes: [0; 7] };
         let le = reset_addr.to_le_bytes();
@@ -120,7 +120,7 @@ impl CpuRp2A03 {
     }
 }
 
-impl Default for CpuRp2A03 {
+impl Default for CpuRp2a03 {
     fn default() -> Self {
         Self { bytes: [0; 7] }
     }

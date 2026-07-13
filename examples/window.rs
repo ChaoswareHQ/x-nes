@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
 
 use nes::bus::Bus;
-use nes::cpu::CpuRp2A03;
+use nes::cpu::CpuRp2a03;
 use nes::rom::Rom;
 use nes::{reset, tick};
 
@@ -64,7 +64,7 @@ fn load_rom(path_or_url: &str) -> Vec<u8> {
 }
 
 struct App {
-    cpu: CpuRp2A03,
+    cpu: CpuRp2a03,
     bus: Bus<'static>,
     window: Option<std::rc::Rc<Window>>,
     ctx: Option<Context<std::rc::Rc<Window>>>,
@@ -87,7 +87,7 @@ impl App {
         let prg: &'static [u8] = Box::leak(rom.prg.to_vec().into_boxed_slice());
         let chr: &'static [u8] = Box::leak(rom.chr.to_vec().into_boxed_slice());
 
-        let mut cpu = CpuRp2A03::new(0);
+        let mut cpu = CpuRp2a03::new(0);
         let mut bus = Bus::new(prg, chr, rom.mirroring);
         reset(&mut cpu, &mut bus);
 
