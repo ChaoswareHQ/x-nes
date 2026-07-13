@@ -131,6 +131,7 @@ impl ApplicationHandler for App {
         if self.audio_stream.is_none() {
             let host = cpal::default_host();
             if let Some(device) = host.default_output_device() {
+                eprintln!("Audio device found, initializing...");
                 let config = cpal::StreamConfig {
                     channels: 1,
                     sample_rate: 44100,
@@ -139,7 +140,7 @@ impl ApplicationHandler for App {
                 let rb = HeapRb::<f32>::new(8192);
                 let (prod, mut cons) = rb.split();
                 
-                let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
+                let err_fn = |err| eprintln!("audio stream error: {}", err);
                 
                 let stream = device.build_output_stream(
                     config,
@@ -152,11 +153,19 @@ impl ApplicationHandler for App {
                     None,
                 );
                 
-                if let Ok(stream) = stream {
-                    let _ = stream.play();
-                    self.audio_stream = Some(stream);
-                    self.audio_tx = Some(prod);
+                match stream {
+                    Ok(stream) => {
+                        match stream.play() {
+                            Ok(_) => eprintln!("Audio stream started successfully"),
+                            Err(e) => eprintln!("Failed to play audio stream: {}", e),
+                        }
+                        self.audio_stream = Some(stream);
+                        self.audio_tx = Some(prod);
+                    }
+                    Err(e) => eprintln!("Failed to build audio stream: {}", e),
                 }
+            } else {
+                eprintln!("No audio output device found");
             }
         }
     }
@@ -225,7 +234,7 @@ impl ApplicationHandler for App {
             self.acc = Duration::from_millis(100);
         }
 
-        let mut ticked = false;
+        let _ticked = false;
         while self.acc >= self.frame_dur {
             while !self.bus.ppu.frame_complete {
                 tick(&mut self.cpu, &mut self.bus);
@@ -235,7 +244,9 @@ impl ApplicationHandler for App {
 
             if let Some(tx) = &mut self.audio_tx {
                 let n = self.bus.apu.sample_count;
-                let pushed = tx.push_slice(&self.bus.apu.audio_samples[..n]);
+                if n > 0 {
+                    let _pushed = tx.push_slice(&self.bus.apu.audio_samples[..n]);
+                }
                 self.bus.apu.sample_count = 0;
             }
         }
