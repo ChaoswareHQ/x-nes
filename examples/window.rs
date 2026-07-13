@@ -132,37 +132,52 @@ impl ApplicationHandler for App {
             let host = cpal::default_host();
             if let Some(device) = host.default_output_device() {
                 eprintln!("Audio device found, initializing...");
-                let config = cpal::StreamConfig {
-                    channels: 1,
-                    sample_rate: 44100,
-                    buffer_size: cpal::BufferSize::Default,
-                };
-                let rb = HeapRb::<f32>::new(8192);
-                let (prod, mut cons) = rb.split();
-                
-                let err_fn = |err| eprintln!("audio stream error: {}", err);
-                
-                let stream = device.build_output_stream(
-                    config,
-                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                        for sample in data.iter_mut() {
-                            *sample = cons.try_pop().unwrap_or(0.0);
+                // Use the device's default config instead of hardcoding
+                match device.default_output_config() {
+                    Ok(supported) => {
+                        let sample_rate = supported.sample_rate();
+                        let channels = supported.channels();
+                        eprintln!("Audio config: {}Hz, {} channels", sample_rate, channels);
+                        
+                        // Update APU sample rate to match device
+                        let cpu_freq: f64 = 1_789_773.0;
+                        self.bus.apu.set_sample_rate(sample_rate as f64);
+                        
+                        let config: cpal::StreamConfig = supported.into();
+                        let rb = HeapRb::<f32>::new(16384);
+                        let (prod, mut cons) = rb.split();
+                        let ch = channels as usize;
+                        
+                        let err_fn = |err| eprintln!("audio stream error: {}", err);
+                        
+                        let stream = device.build_output_stream(
+                            config,
+                            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                                // Fill all channels with the same mono sample
+                                for frame in data.chunks_mut(ch) {
+                                    let s = cons.try_pop().unwrap_or(0.0);
+                                    for sample in frame.iter_mut() {
+                                        *sample = s;
+                                    }
+                                }
+                            },
+                            err_fn,
+                            None,
+                        );
+                        
+                        match stream {
+                            Ok(stream) => {
+                                match stream.play() {
+                                    Ok(_) => eprintln!("Audio stream started successfully"),
+                                    Err(e) => eprintln!("Failed to play audio stream: {}", e),
+                                }
+                                self.audio_stream = Some(stream);
+                                self.audio_tx = Some(prod);
+                            }
+                            Err(e) => eprintln!("Failed to build audio stream: {}", e),
                         }
-                    },
-                    err_fn,
-                    None,
-                );
-                
-                match stream {
-                    Ok(stream) => {
-                        match stream.play() {
-                            Ok(_) => eprintln!("Audio stream started successfully"),
-                            Err(e) => eprintln!("Failed to play audio stream: {}", e),
-                        }
-                        self.audio_stream = Some(stream);
-                        self.audio_tx = Some(prod);
                     }
-                    Err(e) => eprintln!("Failed to build audio stream: {}", e),
+                    Err(e) => eprintln!("Failed to get default output config: {}", e),
                 }
             } else {
                 eprintln!("No audio output device found");

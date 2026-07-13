@@ -39,6 +39,7 @@ pub struct Apu {
     pub audio_samples: [f32; 4096],
     pub sample_count: usize,
     sample_timer: f64,
+    sample_period: f64, // CPU cycles per audio sample
 }
 
 impl Default for Apu {
@@ -56,7 +57,15 @@ impl Apu {
             audio_samples: [0.0; 4096],
             sample_count: 0,
             sample_timer: 0.0,
+            sample_period: 40.584, // 1789773 / 44100 default
         }
+    }
+
+    /// Set the output sample rate (e.g. 48000.0 for 48kHz).
+    /// Recalculates the number of CPU cycles per audio sample.
+    pub fn set_sample_rate(&mut self, rate: f64) {
+        self.sample_period = 1_789_773.0 / rate;
+        eprintln!("APU sample period: {} cycles/sample (rate: {}Hz)", self.sample_period, rate);
     }
 
     pub fn tick(&mut self, cpu_cycles: u8) {
@@ -67,13 +76,11 @@ impl Apu {
                 self.p2.step_timer();
             }
 
-            // NES clock is ~1789773 Hz, target sample rate 44100 Hz
-            // 1789773 / 44100 = ~40.58 CPU cycles per sample
             self.sample_timer += 1.0;
-            if self.sample_timer >= 40.584 {
-                self.sample_timer -= 40.584;
+            if self.sample_timer >= self.sample_period {
+                self.sample_timer -= self.sample_period;
                 if self.sample_count < self.audio_samples.len() {
-                    let out = (self.p1.output() + self.p2.output()) * 0.1; // Mix and lower volume
+                    let out = (self.p1.output() + self.p2.output()) * 0.5;
                     self.audio_samples[self.sample_count] = out;
                     self.sample_count += 1;
                 }
