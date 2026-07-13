@@ -186,7 +186,7 @@ For a 16KB ROM (16384 bytes):
 ## 5.3 How to Load a ROM
 
 ```rust
-use nes::{rom::Rom, bus::Bus, cpu::Cpu6502, lib::{tick, reset}};
+use nes::{rom::Rom, bus::Bus, cpu::CpuRp2A03, lib::{tick, reset}};
 
 // Read ROM file
 let data = std::fs::read("game.nes").unwrap();
@@ -195,7 +195,7 @@ let data = std::fs::read("game.nes").unwrap();
 let rom = Rom::new(&data).unwrap();
 
 // Create CPU and Bus
-let mut cpu = Cpu6502::new(0);
+let mut cpu = CpuRp2A03::new(0);
 let mut bus = Bus::new(&rom.prg, &rom.chr);
 
 // Reset (read reset vector from ROM)

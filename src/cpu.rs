@@ -8,11 +8,11 @@ pub const FLAG_NEGATIVE: u8 = 0b1000_0000;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Cpu6502 {
+pub struct CpuRp2A03 {
     bytes: [u8; 7],
 }
 
-impl Cpu6502 {
+impl CpuRp2A03 {
     pub fn new(reset_addr: u16) -> Self {
         let mut cpu = Self { bytes: [0; 7] };
         let le = reset_addr.to_le_bytes();
@@ -74,7 +74,7 @@ impl Cpu6502 {
     pub fn st(&self) -> u8 {
         self.bytes[5]
     }
-    
+
     #[inline(always)]
     pub fn set_st(&mut self, val: u8) {
         self.bytes[5] = val;
@@ -89,7 +89,6 @@ impl Cpu6502 {
     pub fn set_sr(&mut self, val: u8) {
         self.bytes[6] = val;
     }
-
 
     #[inline(always)]
     pub fn get_flag(&self, flag: u8) -> bool {
@@ -115,13 +114,13 @@ impl Cpu6502 {
     pub fn as_bytes(&self) -> &[u8; 7] {
         &self.bytes
     }
-    
+
     pub fn from_bytes(bytes: &[u8; 7]) -> Self {
         Self { bytes: *bytes }
     }
 }
 
-impl Default for Cpu6502 {
+impl Default for CpuRp2A03 {
     fn default() -> Self {
         Self { bytes: [0; 7] }
     }

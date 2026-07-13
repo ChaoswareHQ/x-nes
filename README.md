@@ -60,13 +60,13 @@ mdbook serve docs/
 ## Usage
 
 ```rust
-use nes::{rom::Rom, bus::Bus, cpu::Cpu6502};
+use nes::{rom::Rom, bus::Bus, cpu::CpuRp2A03};
 use nes::{tick, reset};
 
 let data = std::fs::read("game.nes").unwrap();
 let rom = Rom::new(&data).unwrap();
 
-let mut cpu = Cpu6502::new(0);
+let mut cpu = CpuRp2A03::new(0);
 let mut bus = Bus::new(&rom.prg, &rom.chr);
 reset(&mut cpu, &mut bus);
 

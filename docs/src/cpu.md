@@ -29,7 +29,7 @@ After:    PC → $C001  (PC advanced by 1)
 In x-nes, PC is stored as two bytes (little-endian) at the start of our CPU struct:
 
 ```rust
-pub struct Cpu6502 {
+pub struct CpuRp2A03 {
     bytes: [u8; 7],
     // [0..2] = PC (low byte at index 0, high byte at index 1)
     // [2]    = A
@@ -84,12 +84,12 @@ Stack operations:
 In x-nes, push and pull are straightforward:
 
 ```rust
-fn push(cpu: &mut Cpu6502, bus: &mut Bus<'_>, val: u8) {
+fn push(cpu: &mut CpuRp2A03, bus: &mut Bus<'_>, val: u8) {
     bus.write(0x0100 | cpu.st() as u16, val);
     cpu.set_st(cpu.st().wrapping_sub(1));
 }
 
-fn pull(cpu: &mut Cpu6502, bus: &mut Bus<'_>) -> u8 {
+fn pull(cpu: &mut CpuRp2A03, bus: &mut Bus<'_>) -> u8 {
     cpu.set_st(cpu.st().wrapping_add(1));
     bus.read(0x0100 | cpu.st() as u16)
 }
@@ -202,7 +202,7 @@ Every instruction follows the same three-step cycle:
 In x-nes, this is implemented in `lib.rs`:
 
 ```rust
-pub fn tick(cpu: &mut Cpu6502, bus: &mut Bus<'_>) -> u8 {
+pub fn tick(cpu: &mut CpuRp2A03, bus: &mut Bus<'_>) -> u8 {
     // 1. FETCH: read the opcode byte
     let opcode = bus.read(cpu.pc());
 
@@ -223,7 +223,7 @@ pub fn tick(cpu: &mut Cpu6502, bus: &mut Bus<'_>) -> u8 {
 The decode step uses a **jump table** — an array of 256 function pointers, one per possible opcode:
 
 ```rust
-type Op = for<'a> fn(&mut Cpu6502, &mut Bus<'a>) -> u8;
+type Op = for<'a> fn(&mut CpuRp2A03, &mut Bus<'a>) -> u8;
 
 pub static TABLE: [Op; 256] = [
     brk, ora_indx, illegal, illegal, ...
@@ -239,7 +239,7 @@ Putting it all together, the CPU struct contains everything needed to represent 
 ```rust
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Cpu6502 {
+pub struct CpuRp2A03 {
     bytes: [u8; 7],
 }
 ```

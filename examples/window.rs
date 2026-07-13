@@ -2,10 +2,13 @@ use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
 
 use nes::bus::Bus;
-use nes::cpu::Cpu6502;
+use nes::cpu::CpuRp2A03;
 use nes::rom::Rom;
 use nes::{reset, tick};
 
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use ringbuf::HeapRb;
+use ringbuf::traits::{Consumer, Producer, Split};
 use softbuffer::{Context, Surface};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -13,9 +16,6 @@ use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes};
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use ringbuf::traits::{Producer, Consumer, Split};
-use ringbuf::HeapRb;
 
 const NES_W: u32 = 256;
 const NES_H: u32 = 240;
@@ -64,7 +64,7 @@ fn load_rom(path_or_url: &str) -> Vec<u8> {
 }
 
 struct App {
-    cpu: Cpu6502,
+    cpu: CpuRp2A03,
     bus: Bus<'static>,
     window: Option<std::rc::Rc<Window>>,
     ctx: Option<Context<std::rc::Rc<Window>>>,
@@ -73,7 +73,9 @@ struct App {
     frame_dur: Duration,
     acc: Duration,
     audio_stream: Option<cpal::Stream>,
-    audio_tx: Option<ringbuf::CachingProd<std::sync::Arc<ringbuf::SharedRb<ringbuf::storage::Heap<f32>>>>>,
+    audio_tx: Option<
+        ringbuf::CachingProd<std::sync::Arc<ringbuf::SharedRb<ringbuf::storage::Heap<f32>>>>,
+    >,
 }
 
 impl App {
@@ -85,7 +87,7 @@ impl App {
         let prg: &'static [u8] = Box::leak(rom.prg.to_vec().into_boxed_slice());
         let chr: &'static [u8] = Box::leak(rom.chr.to_vec().into_boxed_slice());
 
-        let mut cpu = Cpu6502::new(0);
+        let mut cpu = CpuRp2A03::new(0);
         let mut bus = Bus::new(prg, chr, rom.mirroring);
         reset(&mut cpu, &mut bus);
 
@@ -138,18 +140,18 @@ impl ApplicationHandler for App {
                         let sample_rate = supported.sample_rate();
                         let channels = supported.channels();
                         eprintln!("Audio config: {}Hz, {} channels", sample_rate, channels);
-                        
+
                         // Update APU sample rate to match device
                         let cpu_freq: f64 = 1_789_773.0;
                         self.bus.apu.set_sample_rate(sample_rate as f64);
-                        
+
                         let config: cpal::StreamConfig = supported.into();
                         let rb = HeapRb::<f32>::new(16384);
                         let (prod, mut cons) = rb.split();
                         let ch = channels as usize;
-                        
+
                         let err_fn = |err| eprintln!("audio stream error: {}", err);
-                        
+
                         let stream = device.build_output_stream(
                             config,
                             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
@@ -164,7 +166,7 @@ impl ApplicationHandler for App {
                             err_fn,
                             None,
                         );
-                        
+
                         match stream {
                             Ok(stream) => {
                                 match stream.play() {
