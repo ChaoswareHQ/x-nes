@@ -21,13 +21,14 @@ pub struct Ppu {
     pub nmi_pending: bool,
     pub frame_complete: bool,
     pub frame: [u8; 256 * 240],
+    pub mirroring: u8,
 
     sprite_count: u8,
     sprite_indices: [u8; 8],
 }
 
 impl Ppu {
-    pub fn new(chr_data: &[u8]) -> Self {
+    pub fn new(chr_data: &[u8], mirroring: u8) -> Self {
         let mut chr_rom = [0u8; 0x2000];
         chr_rom[..chr_data.len().min(0x2000)]
             .copy_from_slice(&chr_data[..chr_data.len().min(0x2000)]);
@@ -51,6 +52,7 @@ impl Ppu {
             nmi_pending: false,
             frame_complete: false,
             frame: [0; 256 * 240],
+            mirroring,
             sprite_count: 0,
             sprite_indices: [0; 8],
         }
@@ -112,7 +114,7 @@ impl Ppu {
         }
     }
 
-    fn render_sprite_pixel(&self, x: u16, sl: u16, bg: u8) -> u8 {
+    fn render_sprite_pixel(&self, x: u16, sl: u16, bg_pixel: u8, bg_color: u8) -> (u8, bool) {
         let use_16 = self.ctrl & 0x20 != 0;
         let sprite_h = if use_16 { 16u16 } else { 8u16 };
 
@@ -161,34 +163,40 @@ impl Ppu {
             if pixel == 0 {
                 continue;
             }
-            if behind && bg != self.palette[0] {
-                continue;
+
+            let hit = idx == 0 && bg_pixel != 0 && x != 255;
+
+            if behind && bg_pixel != 0 {
+                return (bg_color, hit);
             }
 
-            return self.palette[0x10 | ((palette_bits as usize) << 2) | pixel as usize];
+            return (self.palette[0x10 | ((palette_bits as usize) << 2) | pixel as usize], hit);
         }
-        bg
+        (bg_color, false)
     }
 
     fn render_pixel(&mut self, x: u16, y: u16) {
         let bg_enabled = self.mask & 0x08 != 0;
         let show_left = self.mask & 0x02 != 0;
 
-        let bg_colour = if !bg_enabled || (!show_left && x < 8) {
-            0
+        let (bg_pixel, bg_colour) = if !bg_enabled || (!show_left && x < 8) {
+            (0, self.palette[0])
         } else {
             self.get_bg_pixel(x, y)
         };
 
         if self.mask & 0x10 != 0 && (show_left || x >= 8) {
-            let colour = self.render_sprite_pixel(x, y, bg_colour);
+            let (colour, hit) = self.render_sprite_pixel(x, y, bg_pixel, bg_colour);
+            if hit && self.mask & 0x08 != 0 {
+                self.status |= 0x40; // Set Sprite 0 Hit flag
+            }
             self.frame[(y as usize) * 256 + (x as usize)] = colour;
         } else {
             self.frame[(y as usize) * 256 + (x as usize)] = bg_colour;
         }
     }
 
-    fn get_bg_pixel(&self, x: u16, y: u16) -> u8 {
+    fn get_bg_pixel(&self, x: u16, y: u16) -> (u8, u8) {
         let t = self.t;
         let fine_x_scroll = self.fine_x as u16;
 
@@ -200,12 +208,21 @@ impl Ppu {
         let world_x = (coarse_x << 3) + fine_x_scroll + x;
         let world_y = (coarse_y << 3) + fine_y + y;
 
+        let mut actual_nt = nt;
+        if (world_x >> 8) & 1 != 0 {
+            actual_nt ^= 1;
+        }
+        let coarse_y_calc = world_y >> 3;
+        if (coarse_y_calc / 30) & 1 != 0 {
+            actual_nt ^= 2;
+        }
+
         let tile_x = (world_x >> 3) & 31;
-        let tile_y = (world_y >> 3) & 31;
+        let tile_y = (coarse_y_calc % 30) & 31;
         let pixel_x = world_x & 7;
         let pixel_y = world_y & 7;
 
-        let nt_base = 0x2000 | (nt << 10);
+        let nt_base = 0x2000 | (actual_nt << 10);
         let nt_addr = nt_base | (tile_y << 5) | tile_x;
         let tile_index = self.ppu_read_internal(nt_addr);
 
@@ -222,13 +239,13 @@ impl Ppu {
         let pixel = ((high >> shift) & 1) << 1 | ((low >> shift) & 1);
 
         if pixel == 0 {
-            self.palette[0]
+            (0, self.palette[0])
         } else {
             let attr_addr = nt_base | 0x03C0 | ((tile_y >> 2) << 3) | (tile_x >> 2);
             let attr = self.ppu_read_internal(attr_addr);
             let shift = ((tile_x >> 1) & 1) << 1 | ((tile_y >> 1) & 1) << 2;
             let pal_group = (attr >> shift) & 3;
-            self.palette[((pal_group as usize) << 2) | pixel as usize]
+            (pixel, self.palette[((pal_group as usize) << 2) | pixel as usize])
         }
     }
 
@@ -236,7 +253,11 @@ impl Ppu {
         match addr & 0x3FFF {
             a @ 0x0000..=0x1FFF => self.chr_rom[a as usize],
             a @ 0x2000..=0x2FFF => {
-                let nt = (self.ctrl & 3) as usize;
+                let nt = if self.mirroring == 0 {
+                    ((a >> 11) & 1) as usize
+                } else {
+                    ((a >> 10) & 1) as usize
+                };
                 self.vram[nt * 0x400 + (a & 0x03FF) as usize]
             }
             a @ 0x3000..=0x3EFF => self.ppu_read_internal(a & 0x2FFF),
@@ -352,7 +373,11 @@ impl Ppu {
             }
             _a @ 0x0000..=0x1FFF => {}
             a @ 0x2000..=0x2FFF => {
-                let nt = (self.ctrl & 3) as usize;
+                let nt = if self.mirroring == 0 {
+                    ((a >> 11) & 1) as usize
+                } else {
+                    ((a >> 10) & 1) as usize
+                };
                 self.vram[nt * 0x400 + (a & 0x03FF) as usize] = val;
             }
             a @ 0x3000..=0x3EFF => self.ppu_write(a & 0x2FFF, val),

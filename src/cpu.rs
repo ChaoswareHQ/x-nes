@@ -25,11 +25,13 @@ impl Cpu6502 {
     pub fn pc(&self) -> u16 {
         u16::from_le_bytes([self.bytes[0], self.bytes[1]])
     }
+
     #[inline(always)]
     pub fn set_pc(&mut self, val: u16) {
         self.bytes[0] = val as u8;
         self.bytes[1] = (val >> 8) as u8;
     }
+
     #[inline(always)]
     pub fn advance_pc(&mut self, n: u16) {
         let pc = u16::from_le_bytes([self.bytes[0], self.bytes[1]]);
@@ -42,56 +44,69 @@ impl Cpu6502 {
     pub fn a(&self) -> u8 {
         self.bytes[2]
     }
+
     #[inline(always)]
     pub fn set_a(&mut self, val: u8) {
         self.bytes[2] = val;
     }
+
     #[inline(always)]
     pub fn x(&self) -> u8 {
         self.bytes[3]
     }
+
     #[inline(always)]
     pub fn set_x(&mut self, val: u8) {
         self.bytes[3] = val;
     }
+
     #[inline(always)]
     pub fn y(&self) -> u8 {
         self.bytes[4]
     }
+
     #[inline(always)]
     pub fn set_y(&mut self, val: u8) {
         self.bytes[4] = val;
     }
+
     #[inline(always)]
     pub fn st(&self) -> u8 {
         self.bytes[5]
     }
+    
     #[inline(always)]
     pub fn set_st(&mut self, val: u8) {
         self.bytes[5] = val;
     }
+
     #[inline(always)]
     pub fn sr(&self) -> u8 {
         self.bytes[6]
     }
+
     #[inline(always)]
     pub fn set_sr(&mut self, val: u8) {
         self.bytes[6] = val;
     }
 
+
     #[inline(always)]
     pub fn get_flag(&self, flag: u8) -> bool {
         self.bytes[6] & flag != 0
     }
+
     #[inline(always)]
     pub fn set_flag(&mut self, flag: u8, set: bool) {
         let mask = set as u8;
         self.bytes[6] = (self.bytes[6] & !flag) | (mask * flag);
     }
+
     #[inline(always)]
     pub fn set_sign(&mut self, val: u8) {
         self.set_flag(FLAG_NEGATIVE, val & 0x80 != 0);
     }
+
     #[inline(always)]
     pub fn set_zero(&mut self, val: u8) {
         self.set_flag(FLAG_ZERO, val == 0);
@@ -100,6 +115,7 @@ impl Cpu6502 {
     pub fn as_bytes(&self) -> &[u8; 7] {
         &self.bytes
     }
+    
     pub fn from_bytes(bytes: &[u8; 7]) -> Self {
         Self { bytes: *bytes }
     }

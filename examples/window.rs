@@ -13,6 +13,9 @@ use winit::event::{ElementState, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use ringbuf::traits::{Producer, Consumer, Split};
+use ringbuf::HeapRb;
 
 const NES_W: u32 = 256;
 const NES_H: u32 = 240;
@@ -69,6 +72,8 @@ struct App {
     frame_timer: Instant,
     frame_dur: Duration,
     acc: Duration,
+    audio_stream: Option<cpal::Stream>,
+    audio_tx: Option<ringbuf::CachingProd<std::sync::Arc<ringbuf::SharedRb<ringbuf::storage::Heap<f32>>>>>,
 }
 
 impl App {
@@ -81,7 +86,7 @@ impl App {
         let chr: &'static [u8] = Box::leak(rom.chr.to_vec().into_boxed_slice());
 
         let mut cpu = Cpu6502::new(0);
-        let mut bus = Bus::new(prg, chr);
+        let mut bus = Bus::new(prg, chr, rom.mirroring);
         reset(&mut cpu, &mut bus);
 
         Self {
@@ -93,6 +98,8 @@ impl App {
             frame_timer: Instant::now(),
             frame_dur: Duration::from_nanos(1_000_000_000 / 60),
             acc: Duration::new(0, 0),
+            audio_stream: None,
+            audio_tx: None,
         }
     }
 }
@@ -119,6 +126,39 @@ impl ApplicationHandler for App {
         self.surface = Some(surface);
         self.frame_timer = Instant::now();
         event_loop.set_control_flow(ControlFlow::Poll);
+
+        // Init audio
+        if self.audio_stream.is_none() {
+            let host = cpal::default_host();
+            if let Some(device) = host.default_output_device() {
+                let config = cpal::StreamConfig {
+                    channels: 1,
+                    sample_rate: 44100,
+                    buffer_size: cpal::BufferSize::Default,
+                };
+                let rb = HeapRb::<f32>::new(8192);
+                let (prod, mut cons) = rb.split();
+                
+                let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
+                
+                let stream = device.build_output_stream(
+                    config,
+                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                        for sample in data.iter_mut() {
+                            *sample = cons.try_pop().unwrap_or(0.0);
+                        }
+                    },
+                    err_fn,
+                    None,
+                );
+                
+                if let Ok(stream) = stream {
+                    let _ = stream.play();
+                    self.audio_stream = Some(stream);
+                    self.audio_tx = Some(prod);
+                }
+            }
+        }
     }
 
     fn window_event(
@@ -156,18 +196,6 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::RedrawRequested => {
-                let now = Instant::now();
-                self.acc += now - self.frame_timer;
-                self.frame_timer = now;
-
-                while self.acc >= self.frame_dur {
-                    while !self.bus.ppu.frame_complete {
-                        tick(&mut self.cpu, &mut self.bus);
-                    }
-                    self.bus.ppu.frame_complete = false;
-                    self.acc -= self.frame_dur;
-                }
-
                 if let Some(surface) = &mut self.surface {
                     let rc = self.window.as_ref().unwrap();
                     let size = rc.inner_size();
@@ -183,11 +211,40 @@ impl ApplicationHandler for App {
                         let _ = fb.present();
                     }
                 }
-
-                self.window.as_ref().unwrap().request_redraw();
             }
             _ => {}
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let now = Instant::now();
+        self.acc += now - self.frame_timer;
+        self.frame_timer = now;
+
+        if self.acc > Duration::from_millis(100) {
+            self.acc = Duration::from_millis(100);
+        }
+
+        let mut ticked = false;
+        while self.acc >= self.frame_dur {
+            while !self.bus.ppu.frame_complete {
+                tick(&mut self.cpu, &mut self.bus);
+            }
+            self.bus.ppu.frame_complete = false;
+            self.acc -= self.frame_dur;
+
+            if let Some(tx) = &mut self.audio_tx {
+                let n = self.bus.apu.sample_count;
+                let pushed = tx.push_slice(&self.bus.apu.audio_samples[..n]);
+                self.bus.apu.sample_count = 0;
+            }
+        }
+
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+
+        event_loop.set_control_flow(ControlFlow::Poll);
     }
 }
 

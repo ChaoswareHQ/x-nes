@@ -8,7 +8,7 @@ fn load_rom(data: &[u8]) -> (Cpu6502, Bus<'static>) {
     let prg: &'static [u8] = Box::leak(rom.prg.to_vec().into_boxed_slice());
     let chr: &'static [u8] = Box::leak(rom.chr.to_vec().into_boxed_slice());
     let mut cpu = Cpu6502::new(0);
-    let mut bus = Bus::new(prg, chr);
+    let mut bus = Bus::new(prg, chr, rom.mirroring);
     reset(&mut cpu, &mut bus);
     (cpu, bus)
 }

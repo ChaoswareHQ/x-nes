@@ -27,6 +27,8 @@ path = "examples/window.rs"
 softbuffer = "0.4.8"
 winit = "0.30.13"
 ureq = "3.3.0"
+cpal = "0.18.1"
+ringbuf = "0.5.0"
 
 [profile.dev]
 panic = "abort"

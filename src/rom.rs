@@ -13,6 +13,7 @@ impl Rom {
         if data.len() < 16 || data[0..4] != [0x4E, 0x45, 0x53, 0x1A] {
             return None;
         }
+        
         let prg_16kb = data[4] as usize;
         let chr_8kb = data[5] as usize;
         let flags6 = data[6];

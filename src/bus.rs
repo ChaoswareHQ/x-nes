@@ -11,11 +11,11 @@ pub struct Bus<'a> {
 }
 
 impl<'a> Bus<'a> {
-    pub fn new(prg: &'a [u8], chr: &[u8]) -> Self {
+    pub fn new(prg: &'a [u8], chr: &[u8], mirroring: u8) -> Self {
         Self {
             ram: [0; 2048],
             prg,
-            ppu: Ppu::new(chr),
+            ppu: Ppu::new(chr, mirroring),
             apu: Apu::new(),
             pad1: Gamepad::new(),
         }

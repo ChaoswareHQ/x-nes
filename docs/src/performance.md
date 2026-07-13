@@ -168,20 +168,6 @@ Shifting the address right by 12 extracts the top nibble (0-15), which selects t
 
 `(base ^ addr) >> 8` is 0 if same page, 1 if different. Added directly to the cycle count — no branch needed.
 
-## 6.7 Binary Sizes
-
-| Build Configuration | Size |
-|--------------------|------|
-| Debug | ~50 KB |
-| Release (x86_64) | ~9 KB |
-| Release (ARM MCU) | ~4 KB |
-
-The small size comes from:
-1. No libstd (hundreds of KB of I/O, allocators, threading)
-2. No unwind tables (panic = abort)
-3. Dead code elimination (LTO + codegen-units=1)
-4. Symbol stripping
-
 ## Summary
 
 - x-nes is `no_std` — runs anywhere Rust runs
