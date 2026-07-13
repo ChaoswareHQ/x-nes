@@ -1,0 +1,10 @@
+[package]
+name = "x-nes"
+authors = ["Nguyễn Quý Ngọc"]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96.0"
+repository = "https://github.com/ChaoswareHQ/x-nes"
+license = "MIT"
+
+[dev-dependencies]
