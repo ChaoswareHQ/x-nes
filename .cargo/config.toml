@@ -1,0 +1,5 @@
+[target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))']
+rustflags = ["-C", "target-cpu=native"]
+
+[target.thumbv7em-none-eabihf]
+rustflags = ["-C", "opt-level=s"]
