@@ -1,4 +1,5 @@
 use crate::apu::Apu;
+use crate::gamepad::Gamepad;
 use crate::ppu::Ppu;
 
 pub struct Bus<'a> {
@@ -6,6 +7,7 @@ pub struct Bus<'a> {
     pub prg: &'a [u8],
     pub ppu: Ppu,
     pub apu: Apu,
+    pub pad1: Gamepad,
 }
 
 impl<'a> Bus<'a> {
@@ -15,6 +17,7 @@ impl<'a> Bus<'a> {
             prg,
             ppu: Ppu::new(chr),
             apu: Apu::new(),
+            pad1: Gamepad::new(),
         }
     }
 
@@ -24,7 +27,10 @@ impl<'a> Bus<'a> {
         match top {
             0 | 1 => self.ram[(addr & 0x07FF) as usize],
             2 | 3 => self.read_ppu(addr),
-            4 if addr < 0x4020 => self.apu.read(addr),
+            4 if addr < 0x4020 => match addr {
+                0x4016 => self.pad1.read(),
+                _ => self.apu.read(addr),
+            },
             _ => {
                 if addr < 0x8000 || self.prg.is_empty() {
                     0
@@ -41,13 +47,14 @@ impl<'a> Bus<'a> {
         match top {
             0 | 1 => self.ram[(addr & 0x07FF) as usize] = val,
             2 | 3 => self.write_ppu(addr, val),
-            4 if addr < 0x4020 => {
-                if addr == 0x4014 {
-                    self.oam_dma(val);
-                } else {
+            4 if addr < 0x4020 => match addr {
+                0x4014 => self.oam_dma(val),
+                0x4016 => {
+                    self.pad1.write(val);
                     self.apu.write(addr, val);
                 }
-            }
+                _ => self.apu.write(addr, val),
+            },
             _ => {}
         }
     }

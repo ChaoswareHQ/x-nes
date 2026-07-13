@@ -7,14 +7,26 @@ rust-version = "1.97.0"
 repository = "https://github.com/ChaoswareHQ/x-nes"
 license = "MIT"
 
+[features]
+default = ["std"]
+std = []
+
 [lib]
 name = "nes"
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[example]]
+name = "main"
+path = "examples/main.rs"
+
+[[example]]
+name = "window"
+path = "examples/window.rs"
 
 [dev-dependencies]
-config = "0.15.25"
 softbuffer = "0.4.8"
 winit = "0.30.13"
+ureq = "3.3.0"
 
 [profile.dev]
 panic = "abort"

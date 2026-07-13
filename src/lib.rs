@@ -1,4 +1,4 @@
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![deny(
     clippy::all,
     clippy::pedantic,
@@ -30,7 +30,8 @@
     clippy::manual_range_contains,
     clippy::match_same_arms,
     clippy::new_without_default,
-    clippy::missing_const_for_fn
+    clippy::missing_const_for_fn,
+    clippy::struct_excessive_bools
 )]
 
 pub mod address;
@@ -38,6 +39,7 @@ pub mod apu;
 pub mod bus;
 pub mod clock;
 pub mod cpu;
+pub mod gamepad;
 pub mod interrupt;
 pub mod ops;
 pub mod ppu;
@@ -79,7 +81,7 @@ pub fn reset(cpu: &mut Cpu6502, bus: &mut Bus<'_>) {
     *cpu = Cpu6502::new(lo | (hi << 8));
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "std")))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}

@@ -437,7 +437,9 @@ mod op {
     fn sbc_inner(cpu: &mut Cpu6502, operand: u8) {
         let a = cpu.a();
         let carry = cpu.get_flag(FLAG_CARRY) as u16;
-        let result = a as u16 - operand as u16 - (1 - carry);
+        let result = (a as u16)
+            .wrapping_sub(operand as u16)
+            .wrapping_sub(1 - carry);
         let lo = result as u8;
         if cpu.get_flag(FLAG_DECIMAL) {
             let low = (a & 0x0F)
