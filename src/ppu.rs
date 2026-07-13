@@ -90,7 +90,7 @@ impl Ppu {
             let sl = self.scanline;
             let cy = self.cycle;
 
-            if sl < 240 && cy >= 257 && cy <= 340 {
+            if sl < 240 && (257..=340).contains(&cy) {
                 let remaining = 341 - cy;
                 let skip = if remaining < count { remaining } else { count };
                 self.cycle = cy + skip;
@@ -195,11 +195,10 @@ impl Ppu {
 
     pub fn ppu_write(&mut self, addr: u16, val: u8) {
         match addr & 0x3FFF {
-            a @ 0x0000..=0x1FFF => {
-                if self.chr_ram {
-                    self.chr_rom[a as usize] = val;
-                }
+            a @ 0x0000..=0x1FFF if self.chr_ram => {
+                self.chr_rom[a as usize] = val;
             }
+            _a @ 0x0000..=0x1FFF => {}
             a @ 0x2000..=0x2FFF => {
                 self.vram[((self.ctrl & 3) as usize) * 0x400 + (a & 0x03FF) as usize] = val;
             }

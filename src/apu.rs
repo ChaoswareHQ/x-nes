@@ -2,6 +2,12 @@ pub struct Apu {
     pub cycles: u64,
 }
 
+impl Default for Apu {
+    fn default() -> Self {
+        Self { cycles: 0 }
+    }
+}
+
 impl Apu {
     pub fn new() -> Self {
         Self { cycles: 0 }
