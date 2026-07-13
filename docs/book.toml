@@ -1,0 +1,19 @@
+[book]
+title = "x-nes: A Minimal NES Emulator in Rust"
+authors = ["Nguyễn Quý Ngọc"]
+description = "A deep dive into building an optimized NES emulator — from 7-byte CPU state to branchless flag operations"
+language = "en"
+
+[output.html]
+default-theme = "coal"
+preferred-dark-theme = "coal"
+no-section-label = true
+git-repository-url = "https://github.com/ChaoswareHQ/x-nes"
+edit-url-template = "https://github.com/ChaoswareHQ/x-nes/edit/main/docs/src/{path}"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[rust]
+edition = "2024"

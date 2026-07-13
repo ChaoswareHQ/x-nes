@@ -33,6 +33,42 @@ pub mod ops;
 pub mod ppu;
 pub mod rom;
 
+use bus::Bus;
+use cpu::{Cpu6502, FLAG_INTERRUPT};
+use ops::TABLE;
+
+pub fn tick(cpu: &mut Cpu6502, bus: &mut Bus<'_>) -> u8 {
+    let opcode = bus.read(cpu.pc());
+    cpu.set_pc(cpu.pc().wrapping_add(1));
+    let cycles = TABLE[opcode as usize](cpu, bus);
+
+    bus.ppu.tick_batch((cycles as u16) * 3);
+    bus.apu.tick(cycles);
+
+    if bus.poll_nmi() {
+        nmi(cpu, bus);
+    }
+
+    cycles
+}
+
+pub fn nmi(cpu: &mut Cpu6502, bus: &mut Bus<'_>) {
+    crate::ops::push(cpu, bus, (cpu.pc() >> 8) as u8);
+    crate::ops::push(cpu, bus, cpu.pc() as u8);
+    let sr = cpu.sr() | 0x20;
+    crate::ops::push(cpu, bus, sr);
+    cpu.set_flag(FLAG_INTERRUPT, true);
+    let lo = bus.read(0xFFFA) as u16;
+    let hi = bus.read(0xFFFB) as u16;
+    cpu.set_pc(lo | (hi << 8));
+}
+
+pub fn reset(cpu: &mut Cpu6502, bus: &mut Bus<'_>) {
+    let lo = bus.read(0xFFFC) as u16;
+    let hi = bus.read(0xFFFD) as u16;
+    *cpu = Cpu6502::new(lo | (hi << 8));
+}
+
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {

@@ -1,3 +1,11 @@
+pub const FLAG_CARRY: u8 = 0b0000_0001;
+pub const FLAG_ZERO: u8 = 0b0000_0010;
+pub const FLAG_INTERRUPT: u8 = 0b0000_0100;
+pub const FLAG_DECIMAL: u8 = 0b0000_1000;
+pub const FLAG_BREAK: u8 = 0b0001_0000;
+pub const FLAG_OVERFLOW: u8 = 0b0100_0000;
+pub const FLAG_NEGATIVE: u8 = 0b1000_0000;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Cpu6502 {
@@ -7,84 +15,91 @@ pub struct Cpu6502 {
 impl Cpu6502 {
     pub fn new(reset_addr: u16) -> Self {
         let mut cpu = Self { bytes: [0; 7] };
-        cpu.set_pc(reset_addr);
+        let le = reset_addr.to_le_bytes();
+        cpu.bytes[0] = le[0];
+        cpu.bytes[1] = le[1];
         cpu
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn pc(&self) -> u16 {
         u16::from_le_bytes([self.bytes[0], self.bytes[1]])
     }
-    #[inline]
+    #[inline(always)]
     pub fn set_pc(&mut self, val: u16) {
-        self.bytes[0..2].copy_from_slice(&val.to_le_bytes());
+        self.bytes[0] = val as u8;
+        self.bytes[1] = (val >> 8) as u8;
+    }
+    #[inline(always)]
+    pub fn advance_pc(&mut self, n: u16) {
+        let pc = u16::from_le_bytes([self.bytes[0], self.bytes[1]]);
+        let next = pc.wrapping_add(n);
+        self.bytes[0] = next as u8;
+        self.bytes[1] = (next >> 8) as u8;
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn a(&self) -> u8 {
         self.bytes[2]
     }
-    #[inline]
+    #[inline(always)]
     pub fn set_a(&mut self, val: u8) {
         self.bytes[2] = val;
     }
-
-    #[inline]
+    #[inline(always)]
     pub fn x(&self) -> u8 {
         self.bytes[3]
     }
-    #[inline]
+    #[inline(always)]
     pub fn set_x(&mut self, val: u8) {
         self.bytes[3] = val;
     }
-
-    #[inline]
+    #[inline(always)]
     pub fn y(&self) -> u8 {
         self.bytes[4]
     }
-    #[inline]
+    #[inline(always)]
     pub fn set_y(&mut self, val: u8) {
         self.bytes[4] = val;
     }
-
-    #[inline]
+    #[inline(always)]
     pub fn st(&self) -> u8 {
         self.bytes[5]
     }
-    #[inline]
+    #[inline(always)]
     pub fn set_st(&mut self, val: u8) {
         self.bytes[5] = val;
     }
-
-    #[inline]
-    pub fn status(&self) -> u8 {
+    #[inline(always)]
+    pub fn sr(&self) -> u8 {
         self.bytes[6]
     }
-    #[inline]
-    pub fn set_status(&mut self, val: u8) {
+    #[inline(always)]
+    pub fn set_sr(&mut self, val: u8) {
         self.bytes[6] = val;
     }
 
-    #[inline]
-    pub fn set_flag(&mut self, flag: u8, set: bool) {
-        if set {
-            self.bytes[6] |= flag;
-        } else {
-            self.bytes[6] &= !flag;
-        }
-    }
-
-    #[inline]
+    #[inline(always)]
     pub fn get_flag(&self, flag: u8) -> bool {
         self.bytes[6] & flag != 0
     }
-}
+    #[inline(always)]
+    pub fn set_flag(&mut self, flag: u8, set: bool) {
+        let mask = set as u8;
+        self.bytes[6] = (self.bytes[6] & !flag) | (mask * flag);
+    }
+    #[inline(always)]
+    pub fn set_sign(&mut self, val: u8) {
+        self.set_flag(FLAG_NEGATIVE, val & 0x80 != 0);
+    }
+    #[inline(always)]
+    pub fn set_zero(&mut self, val: u8) {
+        self.set_flag(FLAG_ZERO, val == 0);
+    }
 
-impl Cpu6502 {
     pub fn as_bytes(&self) -> &[u8; 7] {
         &self.bytes
     }
-
     pub fn from_bytes(bytes: &[u8; 7]) -> Self {
         Self { bytes: *bytes }
     }
@@ -95,11 +110,3 @@ impl Default for Cpu6502 {
         Self { bytes: [0; 7] }
     }
 }
-
-pub const FLAG_CARRY: u8 = 0b0000_0001;
-pub const FLAG_ZERO: u8 = 0b0000_0010;
-pub const FLAG_INTERRUPT: u8 = 0b0000_0100;
-pub const FLAG_DECIMAL: u8 = 0b0000_1000;
-pub const FLAG_BREAK: u8 = 0b0001_0000;
-pub const FLAG_OVERFLOW: u8 = 0b0100_0000;
-pub const FLAG_NEGATIVE: u8 = 0b1000_0000;
