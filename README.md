@@ -11,7 +11,7 @@ A minimal NES emulator written in Rust, targeting everything from microcontrolle
 - iNES ROM parser (mapper 0 / NROM)
 - No standard library dependency — works on bare metal
 - Builds as both shared library (`.dll`/`.so`) and static library (`.a`)
-- 9KB release binary for desktop, ~4KB for microcontroller targets
+- 103KB release binary for desktop.
 
 ## Building
 
@@ -30,7 +30,7 @@ cargo run --release --example window -- "your-rom.nes"
 
 | Module | Description |
 |--------|-------------|
-| `cpu` | 6502 CPU registers and branchless flag operations |
+| `cpu` | RP2A03 CPU registers and branchless flag operations |
 | `ops` | 256-entry jump table and all instruction implementations |
 | `bus` | Memory bus with PPU/APU routing and OAM DMA |
 | `ppu` | Picture Processing Unit with scanline timing |
@@ -44,7 +44,7 @@ cargo run --release --example window -- "your-rom.nes"
 
 The [x-nes book](https://chaoswarehq.github.io/x-nes/) explains the emulator in detail:
 
-1. The 6502 CPU — registers, flags, memory model
+1. The RP2A03 CPU — registers, flags, memory model
 2. Instruction Set & Addressing Modes — all 13 modes, instruction categories
 3. Memory & I/O — bus dispatch, RAM mirroring, PPU/APU routing
 4. Picture Processing Unit — scanlines, registers, NMI generation
