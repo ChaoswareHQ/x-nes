@@ -9,6 +9,13 @@ pub const FLAG_NEGATIVE: u8 = 0b1000_0000;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CpuRp2a03 {
+    // Layout:
+    // 0..2   => PC (u16 - Program Counter)
+    // 2      => A  (u8  - Accumulator)
+    // 3      => X  (u8  - Index Register X)
+    // 4      => Y  (u8  - Index Register Y)
+    // 5      => ST (u8  - Stack Pointer)
+    // 6      => SR (u8  - Status Register 'P')
     bytes: [u8; 7],
 }
 
