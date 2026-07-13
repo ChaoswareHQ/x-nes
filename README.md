@@ -21,6 +21,9 @@ cargo build --release
 
 # Microcontroller (staticlib, ARM Cortex-M4 example)
 cargo build --release --target thumbv7em-none-eabihf
+
+# Example (included input and gui)
+cargo run --release --example window -- "your-rom.nes"
 ```
 
 ## Project Structure
