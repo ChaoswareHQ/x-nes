@@ -115,23 +115,6 @@ end
 | `interrupt` | Vector address constants (NMI, RESET, IRQ) |
 | `address` | Memory region classification helpers |
 
-## Book
-
-The [x-nes book](https://chaoswarehq.github.io/x-nes/) dives deep into the emulator:
-
-1. The RP2A03 CPU – registers, flags, memory model
-2. Instruction Set & Addressing Modes – all 13 modes with timing
-3. Memory & I/O – bus dispatch, mirroring, PPU/APU routing
-4. Picture Processing Unit – scanlines, registers, NMI generation
-5. Audio & ROM Loading – APU channels, iNES format
-6. Performance & Portability – `no_std` design, cross‑compilation, optimizations
-
-```sh
-# Build the book locally
-cargo install mdbook
-mdbook serve docs/
-```
-
 ## License
 
 MIT OR Apache-2.0
