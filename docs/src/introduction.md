@@ -17,10 +17,12 @@ All running in lockstep, synchronized to the NES's master clock.
 
 x-nes is a from-scratch implementation of the NES hardware in Rust. It is:
 
-- **Cycle-accurate** — every instruction takes the exact number of CPU cycles as real hardware
-- **no_std** — no operating system dependencies, runs on bare metal
-- **Small** — the compiled library is ~9KB
-- **Portable** — same code runs on x86_64, ARM, and microcontrollers
+- **Cycle-accurate** — the CPU follows the expected cycle timing for each instruction
+- **no_std** — no operating system dependencies, so it can run on bare metal
+- **Portable** — the same core code is shared across desktop and embedded targets
+- **Practical** — it currently supports CPU execution, bus routing, PPU timing, ROM loading, and NROM mapper behavior
+
+The current implementation focuses on the core emulator loop and the main NES subsystems. Audio support is still intentionally lightweight, with the APU exposing register handling and timing hooks rather than full sound synthesis.
 
 ## How This Book is Organized
 

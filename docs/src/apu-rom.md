@@ -26,7 +26,7 @@ $4015:         Status register (read = channel activity, write = enable)
 $4017:         Frame counter (mode, IRQ disable)
 ```
 
-The x-nes APU is a minimal stub that tracks writes but doesn't generate samples:
+The x-nes APU is a minimal stub that tracks timing and accepts register writes without generating audio samples yet:
 
 ```rust
 pub struct Apu {
@@ -42,18 +42,15 @@ impl Apu {
 
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
-            0x4015 => {
-                let s = 0;  // TODO: read channel status
-                s
-            }
+            0x4015 => 0,
             _ => 0,
         }
     }
 
     pub fn write(&mut self, addr: u16, _val: u8) {
         match addr {
-            0x4000..=0x4013 | 0x4017 => { /* TODO: channel control */ }
-            0x4015 => { /* TODO: channel enable */ }
+            0x4000..=0x4013 | 0x4017 => {}
+            0x4015 => {}
             _ => {}
         }
     }
@@ -186,7 +183,7 @@ For a 16KB ROM (16384 bytes):
 ## 5.3 How to Load a ROM
 
 ```rust
-use nes::{rom::Rom, bus::Bus, cpu::CpuRp2a03, lib::{tick, reset}};
+use nes::{bus::Bus, cpu::CpuRp2a03, rom::Rom, reset, tick};
 
 // Read ROM file
 let data = std::fs::read("game.nes").unwrap();
@@ -196,7 +193,7 @@ let rom = Rom::new(&data).unwrap();
 
 // Create CPU and Bus
 let mut cpu = CpuRp2a03::new(0);
-let mut bus = Bus::new(&rom.prg, &rom.chr);
+let mut bus = Bus::new(&rom.prg, &rom.chr, rom.mirroring);
 
 // Reset (read reset vector from ROM)
 reset(&mut cpu, &mut bus);
@@ -213,9 +210,9 @@ loop {
 
 ## Summary
 
-- The APU has 5 sound channels controlled by 21 registers
-- x-nes currently implements APU register stubs
+- The APU has 5 sound channels, but x-nes currently implements register stubs and timing hooks rather than full synthesis
 - iNES ROMs have a 16-byte header followed by PRG and CHR data
-- NROM (mapper 0) is the simplest cartridge type
+- NROM (mapper 0) is the simplest cartridge type and is the main mapper supported today
 - 16KB PRG-ROM is mirrored to fill 32KB
+- The emulator core is designed to stay small, portable, and suitable for both desktop and embedded targets
 - ROM data is borrowed, not owned — no allocation needed
