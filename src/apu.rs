@@ -22,7 +22,7 @@ impl Pulse {
         if !self.enabled || self.timer_load < 8 || self.length_counter == 0 {
             return 0.0;
         }
-        let duty_table = [0b01000000, 0b01100000, 0b01111000, 0b10011111];
+        let duty_table = [0b0100_0000, 0b0110_0000, 0b0111_1000, 0b1001_1111];
         let bit = (duty_table[self.duty as usize] >> self.duty_step) & 1;
         if bit != 0 {
             (self.vol as f32) / 15.0
@@ -71,7 +71,7 @@ impl Apu {
     pub fn tick(&mut self, cpu_cycles: u8) {
         for _ in 0..cpu_cycles {
             self.cycles += 1;
-            if self.cycles % 2 == 0 {
+            if self.cycles.is_multiple_of(2) {
                 self.p1.step_timer();
                 self.p2.step_timer();
             }

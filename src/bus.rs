@@ -1,5 +1,5 @@
 use crate::apu::Apu;
-use crate::gamepad::Gamepad;
+use crate::controller::Gamepad;
 use crate::ppu::Ppu;
 
 pub struct Bus<'a> {

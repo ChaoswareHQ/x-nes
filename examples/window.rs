@@ -142,7 +142,6 @@ impl ApplicationHandler for App {
                         eprintln!("Audio config: {}Hz, {} channels", sample_rate, channels);
 
                         // Update APU sample rate to match device
-                        let cpu_freq: f64 = 1_789_773.0;
                         self.bus.apu.set_sample_rate(sample_rate as f64);
 
                         let config: cpal::StreamConfig = supported.into();

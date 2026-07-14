@@ -181,7 +181,7 @@ fn reset_sets_pc() {
 
 #[test]
 fn gamepad_write_strobe() {
-    let mut pad = nes::gamepad::Gamepad::new();
+    let mut pad = nes::controller::Gamepad::new();
 
     pad.a = true;
     pad.write(1);
@@ -208,7 +208,7 @@ fn gamepad_write_strobe() {
     assert_eq!(pad.read(), 1);
     assert_eq!(pad.read(), 1);
 
-    let mut pad = nes::gamepad::Gamepad::new();
+    let mut pad = nes::controller::Gamepad::new();
     pad.a = true;
     pad.write(1);
     pad.write(0);
