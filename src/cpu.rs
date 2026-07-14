@@ -41,8 +41,7 @@ impl CpuRp2a03 {
 
     #[inline(always)]
     pub fn advance_pc(&mut self, n: u16) {
-        let pc = u16::from_le_bytes([self.bytes[0], self.bytes[1]]);
-        let next = pc.wrapping_add(n);
+        let next = self.pc().wrapping_add(n).to_le_bytes();
         self.bytes[0] = next as u8;
         self.bytes[1] = (next >> 8) as u8;
     }
