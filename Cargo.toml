@@ -25,7 +25,6 @@ ffi = []
 [lib]
 name = "nes"
 crate-type = ["lib", "cdylib", "staticlib"]
-autobins = false
 
 [[example]]
 name = "main"
