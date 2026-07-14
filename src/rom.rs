@@ -1,3 +1,5 @@
+use crate::mapper::Mapper;
+
 pub struct Rom {
     pub prg: [u8; 0x8000],
     pub chr: [u8; 0x2000],
@@ -13,13 +15,14 @@ impl Rom {
         if data.len() < 16 || data[0..4] != [0x4E, 0x45, 0x53, 0x1A] {
             return None;
         }
-        
+
         let prg_16kb = data[4] as usize;
         let chr_8kb = data[5] as usize;
         let flags6 = data[6];
         let flags7 = data[7];
-        let mapper = (flags7 & 0xF0) | (flags6 >> 4);
-        let mirroring = flags6 & 0x01;
+        let mapper_info = Mapper::from_header(flags6, flags7);
+        let mapper = mapper_info.id;
+        let mirroring = mapper_info.mirroring;
         let has_chr_ram = chr_8kb == 0;
 
         let prg_size = prg_16kb * 0x4000;

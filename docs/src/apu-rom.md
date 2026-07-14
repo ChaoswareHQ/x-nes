@@ -156,7 +156,22 @@ impl Rom {
 }
 ```
 
-### 5.2.4 NROM (Mapper 0)
+### 5.2.4 Mapper Overview
+
+NES cartridges use a mapper chip to extend the console's memory and features. The iNES header stores the mapper number and mirroring mode, and x-nes currently parses those values from the ROM header so the emulator can identify the cartridge configuration.
+
+Common official examples include:
+
+- **Mapper 0 (NROM):** used by games such as *Super Mario Bros.* and *10-Yard Fight*
+- **Mapper 1 (MMC1):** used by games such as *The Legend of Zelda* and *Metroid*
+- **Mapper 2 (UxROM):** used by games such as *Castlevania* and *Contra*
+- **Mapper 3 (CNROM):** used by games such as *1942* and *The Goonies*
+- **Mapper 4 (MMC3):** used by games such as *Super Mario Bros. 3* and *Mega Man 3*
+- **Mapper 9 (MMC2):** used by *Mike Tyson's Punch-Out!!*
+
+For a complete reference of all known mappers, see the NesDev wiki's mapper list.
+
+### 5.2.5 NROM (Mapper 0)
 
 NROM is the simplest mapper and the only one implemented. In NROM:
 

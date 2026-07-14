@@ -8,7 +8,7 @@ A minimal NES emulator written in Rust, targeting everything from microcontrolle
 
 - Cycle-accurate 6502 CPU emulation (56 instructions, 13 addressing modes)
 - PPU with scanline-accurate timing and NMI generation
-- iNES ROM parser (mapper 0 / NROM)
+- iNES ROM parser with mapper and mirroring metadata support
 - No standard library dependency — works on bare metal
 - Builds as both shared library (`.dll`/`.so`) and static library (`.a`)
 - 103KB release binary for desktop.

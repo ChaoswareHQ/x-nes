@@ -39,9 +39,13 @@ pub mod apu;
 pub mod bus;
 pub mod clock;
 pub mod cpu;
+
+#[cfg(feature = "ffi")]
 pub mod ffi;
+
 pub mod controller;
 pub mod interrupt;
+pub mod mapper;
 pub mod ops;
 pub mod ppu;
 pub mod rom;
