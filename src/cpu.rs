@@ -35,10 +35,11 @@ impl CpuRp2a03 {
 
     #[inline(always)]
     pub fn set_pc(&mut self, val: u16) {
-        self.bytes[0] = val as u8;
-        self.bytes[1] = (val >> 8) as u8;
+        let le = val.to_le_bytes();
+        self.bytes[0] = le[0];
+        self.bytes[1] = le[1];
     }
-
+    
     #[inline(always)]
     pub fn advance_pc(&mut self, n: u16) {
         let next = self.pc().wrapping_add(n).to_le_bytes();
