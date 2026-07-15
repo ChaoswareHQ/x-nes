@@ -14,7 +14,7 @@ fn main() {
     let rom = Rom::new(&data).expect("invalid iNES ROM");
 
     let mut cpu = CpuRp2a03::new(0);
-    let mut bus = Bus::new(&rom.prg, &rom.chr, rom.mirroring);
+    let mut bus = Bus::new(rom.create_mapper());
     reset(&mut cpu, &mut bus);
 
     let mut total_cycles = 0u64;

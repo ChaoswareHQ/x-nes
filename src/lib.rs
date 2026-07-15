@@ -54,12 +54,12 @@ use bus::Bus;
 use cpu::{CpuRp2a03, FLAG_INTERRUPT};
 use ops::TABLE;
 
-pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) -> u8 {
+pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let opcode = bus.read(cpu.pc());
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let cycles = TABLE[opcode as usize](cpu, bus);
 
-    bus.ppu.tick_batch((cycles as u16) * 3);
+    bus.ppu_tick((cycles as u16) * 3);
     bus.apu.tick(cycles as u16);
 
     if bus.poll_nmi() {
@@ -69,7 +69,7 @@ pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) -> u8 {
     cycles
 }
 
-pub fn nmi(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) {
+pub fn nmi(cpu: &mut CpuRp2a03, bus: &mut Bus) {
     crate::ops::push(cpu, bus, (cpu.pc() >> 8) as u8);
     crate::ops::push(cpu, bus, cpu.pc() as u8);
     let sr = cpu.sr() | 0x20;
@@ -80,7 +80,7 @@ pub fn nmi(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) {
     cpu.set_pc(lo | (hi << 8));
 }
 
-pub fn reset(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) {
+pub fn reset(cpu: &mut CpuRp2a03, bus: &mut Bus) {
     let lo = bus.read(0xFFFC) as u16;
     let hi = bus.read(0xFFFD) as u16;
     *cpu = CpuRp2a03::new(lo | (hi << 8));

@@ -1,27 +1,22 @@
 #![allow(
     clippy::missing_safety_doc,
     clippy::module_name_repetitions,
-    clippy::similar_names
+    clippy::similar_names,
+    dead_code
 )]
 
-use core::mem::{transmute, MaybeUninit};
+use core::mem::{MaybeUninit, transmute};
 use core::ptr::{addr_of, addr_of_mut};
 use core::slice;
 
 use crate::bus::Bus;
 use crate::cpu::CpuRp2a03;
+use crate::mapper::Mapper;
 use crate::rom::Rom;
 use crate::{reset, tick};
 
-const MAX_PRG_SIZE: usize = 0x8000;
-const MAX_CHR_SIZE: usize = 0x2000;
-
 struct NesEmulator {
-    prg: [u8; MAX_PRG_SIZE],
-    chr: [u8; MAX_CHR_SIZE],
-    prg_size: usize,
-    chr_size: usize,
-    bus: Bus<'static>,
+    bus: Bus,
     cpu: CpuRp2a03,
 }
 
@@ -35,23 +30,9 @@ impl NesEmulator {
             None => return false,
         };
 
-        let prg_len = rom.prg_size.min(MAX_PRG_SIZE);
-        let chr_len = rom.chr_size.min(MAX_CHR_SIZE);
-
-        self.prg[..prg_len].copy_from_slice(&rom.prg[..prg_len]);
-        self.chr[..chr_len].copy_from_slice(&rom.chr[..chr_len]);
-        self.prg_size = prg_len;
-        self.chr_size = chr_len;
-
-        let prg_slice: &'static [u8] = unsafe { transmute(&self.prg[..prg_len]) };
-        let chr_slice: &'static [u8] = unsafe { transmute(&self.chr[..chr_len]) };
-
-        let mut bus = Bus::new(prg_slice, chr_slice, rom.mirroring);
-        let mut cpu = CpuRp2a03::new(0x0000);
-        reset(&mut cpu, &mut bus);
-
-        self.bus = bus;
-        self.cpu = cpu;
+        self.cpu = CpuRp2a03::new(0x0000);
+        self.bus = Bus::new(rom.create_mapper());
+        reset(&mut self.cpu, &mut self.bus);
         true
     }
 
@@ -86,11 +67,12 @@ impl NesEmulator {
     }
     #[inline(always)]
     fn read_ppu(&mut self, addr: u16) -> u8 {
-        self.bus.ppu.ppu_read(addr)
+        self.bus.ppu_read_mapped(addr)
     }
+
     #[inline(always)]
     fn write_ppu(&mut self, addr: u16, val: u8) {
-        self.bus.ppu.ppu_write(addr, val);
+        self.bus.ppu_write_mapped(addr, val);
     }
 
     fn read_cpu_block(&mut self, addr: u16, dst: &mut [u8]) {
@@ -105,30 +87,13 @@ impl NesEmulator {
     }
     fn read_ppu_block(&mut self, addr: u16, dst: &mut [u8]) {
         for (i, b) in dst.iter_mut().enumerate() {
-            *b = self.bus.ppu.ppu_read(addr.wrapping_add(i as u16));
+            *b = self.bus.ppu_read_mapped(addr.wrapping_add(i as u16));
         }
     }
     fn write_ppu_block(&mut self, addr: u16, src: &[u8]) {
         for (i, &b) in src.iter().enumerate() {
-            self.bus.ppu.ppu_write(addr.wrapping_add(i as u16), b);
+            self.bus.ppu_write_mapped(addr.wrapping_add(i as u16), b);
         }
-    }
-
-    #[inline(always)]
-    fn prg_mut_ptr(&mut self) -> *mut u8 {
-        self.prg.as_mut_ptr()
-    }
-    #[inline(always)]
-    fn chr_mut_ptr(&mut self) -> *mut u8 {
-        self.chr.as_mut_ptr()
-    }
-    #[inline(always)]
-    fn prg_size(&self) -> usize {
-        self.prg_size
-    }
-    #[inline(always)]
-    fn chr_size(&self) -> usize {
-        self.chr_size
     }
 
     #[inline(always)]
@@ -138,7 +103,10 @@ impl NesEmulator {
 
     #[inline(always)]
     fn audio_samples(&self) -> (*const f32, usize) {
-        (self.bus.apu.audio_samples.as_ptr(), self.bus.apu.sample_count)
+        (
+            self.bus.apu.audio_samples.as_ptr(),
+            self.bus.apu.sample_count,
+        )
     }
     #[inline(always)]
     fn clear_audio(&mut self) {
@@ -173,7 +141,9 @@ impl NesEmulator {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn nes_init() -> i32 {
-    unsafe { addr_of_mut!(EMU).write(MaybeUninit::zeroed()); }
+    unsafe {
+        addr_of_mut!(EMU).write(MaybeUninit::zeroed());
+    }
     0
 }
 
@@ -255,30 +225,6 @@ pub extern "C" fn nes_write_ppu_block(addr: u16, src: *const u8, len: usize) {
     let emu = unsafe { addr_of_mut!(EMU).cast::<NesEmulator>().as_mut().unwrap() };
     let slice = unsafe { slice::from_raw_parts(src, len) };
     emu.write_ppu_block(addr, slice);
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn nes_get_prg_ptr() -> *mut u8 {
-    let emu = unsafe { addr_of_mut!(EMU).cast::<NesEmulator>().as_mut().unwrap() };
-    emu.prg_mut_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn nes_get_prg_size() -> usize {
-    let emu = unsafe { addr_of!(EMU).cast::<NesEmulator>().as_ref().unwrap() };
-    emu.prg_size()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn nes_get_chr_ptr() -> *mut u8 {
-    let emu = unsafe { addr_of_mut!(EMU).cast::<NesEmulator>().as_mut().unwrap() };
-    emu.chr_mut_ptr()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn nes_get_chr_size() -> usize {
-    let emu = unsafe { addr_of!(EMU).cast::<NesEmulator>().as_ref().unwrap() };
-    emu.chr_size()
 }
 
 #[unsafe(no_mangle)]

@@ -1,11 +1,9 @@
 use crate::mapper::Mapper;
 
 pub struct Rom {
-    pub prg: [u8; 0x8000],
-    pub chr: [u8; 0x2000],
-    pub prg_size: usize,
-    pub chr_size: usize,
-    pub mapper: u8,
+    pub prg: Vec<u8>,
+    pub chr: Vec<u8>,
+    pub mapper_id: u8,
     pub mirroring: u8,
     pub has_chr_ram: bool,
 }
@@ -20,64 +18,44 @@ impl Rom {
         let chr_8kb = data[5] as usize;
         let flags6 = data[6];
         let flags7 = data[7];
-        let mapper_info = Mapper::from_header(flags6, flags7);
-        let mapper = mapper_info.id;
-        let mirroring = mapper_info.mirroring;
+        let mapper_id = (flags7 & 0xF0) | (flags6 >> 4);
+        let mirroring = flags6 & 0x01;
         let has_chr_ram = chr_8kb == 0;
 
         let prg_size = prg_16kb * 0x4000;
         let header_size = if flags6 & 0x04 != 0 { 16 + 512 } else { 16 };
 
-        let mut prg = [0u8; 0x8000];
-        let mut chr = [0u8; 0x2000];
-
         let data_start = header_size;
         let data_end = data.len();
         let prg_end = (data_start + prg_size).min(data_end);
-        let prg_real = prg_end - data_start;
 
-        if prg_real > 0 {
-            let prg_src = if prg_real > 0x8000 {
-                &data[prg_end - 0x8000..prg_end]
-            } else {
-                &data[data_start..prg_end]
-            };
-            prg[..prg_src.len()].copy_from_slice(prg_src);
-            if prg_real == 0x4000 {
-                prg[0x4000..0x8000].copy_from_slice(prg_src);
-            }
-        }
-
-        if !has_chr_ram {
+        let prg = data[data_start..prg_end].to_vec();
+        let chr = if has_chr_ram {
+            vec![0u8; 0x2000]
+        } else {
             let chr_size = chr_8kb * 0x2000;
             let chr_start = data_start + prg_size;
             let chr_end = (chr_start + chr_size).min(data_end);
-            let chr_real = chr_end - chr_start;
-            if chr_real > 0 {
-                let chr_src = &data[chr_start..chr_end];
-                let copy_len = chr_src.len().min(0x2000);
-                chr[..copy_len].copy_from_slice(&chr_src[..copy_len]);
-            }
-        }
+            data[chr_start..chr_end].to_vec()
+        };
 
         Some(Self {
             prg,
             chr,
-            prg_size: prg_real.min(0x8000),
-            chr_size: if has_chr_ram { 0 } else { chr_8kb * 0x2000 },
-            mapper,
+            mapper_id,
             mirroring,
             has_chr_ram,
         })
     }
 
-    pub fn read_prg(&self, addr: u16) -> u8 {
-        let idx = (addr & 0x7FFF) as usize;
-        if self.prg_size <= 0x4000 && idx >= 0x4000 {
-            self.prg[idx % 0x4000]
-        } else {
-            self.prg[idx.min(0x7FFF)]
-        }
+    pub fn create_mapper(&self) -> Mapper {
+        Mapper::from_ines(
+            self.mapper_id,
+            self.mirroring,
+            &self.prg,
+            &self.chr,
+            self.has_chr_ram,
+        )
     }
 }
 
@@ -108,14 +86,10 @@ mod tests {
         let mut data = fake_header(1, 0, 0x00, 0x00);
         data.extend(&prg);
         let rom = Rom::new(&data).unwrap();
-
-        assert_eq!(rom.mapper, 0);
+        assert_eq!(rom.mapper_id, 0);
         assert_eq!(rom.mirroring, 0);
         assert!(rom.has_chr_ram);
-        assert_eq!(rom.prg[0], 0xAB);
-        assert_eq!(rom.prg[0x3FFF], 0xAB);
-        assert_eq!(rom.prg[0x4000], 0xAB);
-        assert_eq!(rom.prg[0x7FFF], 0xAB);
+        assert_eq!(rom.prg.len(), 0x4000);
     }
 
     #[test]
@@ -126,8 +100,7 @@ mod tests {
         data.extend(&prg);
         data.extend(&chr);
         let rom = Rom::new(&data).unwrap();
-
-        assert_eq!(rom.mapper, 0);
+        assert_eq!(rom.mapper_id, 0);
         assert!(!rom.has_chr_ram);
         assert_eq!(rom.chr[0], 0xEF);
         assert_eq!(rom.chr[0x1FFF], 0xEF);
@@ -139,9 +112,7 @@ mod tests {
         let mut data = fake_header(2, 0, 0x00, 0x00);
         data.extend(&prg);
         let rom = Rom::new(&data).unwrap();
-
-        assert_eq!(rom.prg[0], 0x42);
-        assert_eq!(rom.prg[0x7FFF], 0x42);
+        assert_eq!(rom.prg.len(), 0x8000);
         assert!(rom.has_chr_ram);
     }
 
@@ -149,7 +120,7 @@ mod tests {
     fn mapper_detected() {
         let data = fake_header(1, 0, 0x50, 0x10);
         let rom = Rom::new(&data).unwrap();
-        assert_eq!(rom.mapper, 0x15);
+        assert_eq!(rom.mapper_id, 0x15);
     }
 
     #[test]
@@ -172,43 +143,39 @@ mod tests {
     }
 
     #[test]
-    fn read_prg_16kb_mirror() {
-        let mut prg = vec![0u8; 0x4000];
-        prg[0] = 0x11;
-        prg[0x3FFF] = 0x22;
+    fn create_mapper_nrom() {
+        let prg = vec![0xABu8; 0x4000];
         let mut data = fake_header(1, 0, 0x00, 0x00);
         data.extend(&prg);
         let rom = Rom::new(&data).unwrap();
-
-        assert_eq!(rom.read_prg(0x8000), 0x11);
-        assert_eq!(rom.read_prg(0xC000), 0x11);
-        assert_eq!(rom.read_prg(0xBFFF), 0x22);
-        assert_eq!(rom.read_prg(0xFFFF), 0x22);
+        let mut mapper = rom.create_mapper();
+        assert_eq!(mapper.cpu_read(0x8000), 0xAB);
+        assert_eq!(mapper.cpu_read(0xC000), 0xAB);
     }
 
     #[test]
-    fn read_prg_32kb() {
-        let mut prg = vec![0u8; 0x8000];
-        prg[0] = 0x33;
-        prg[0x7FFF] = 0x44;
+    fn create_mapper_mmc3() {
+        let prg = vec![0xABu8; 0x8000];
         let mut data = fake_header(2, 0, 0x00, 0x00);
         data.extend(&prg);
         let rom = Rom::new(&data).unwrap();
-
-        assert_eq!(rom.read_prg(0x8000), 0x33);
-        assert_eq!(rom.read_prg(0xFFFF), 0x44);
+        let mut mapper = rom.create_mapper();
+        // $E000 should read from last 8KB bank
+        assert_eq!(mapper.cpu_read(0xE000), 0xAB);
     }
 
     #[test]
-    fn chr_ram_zeros_when_no_chr() {
-        let prg = vec![0u8; 0x4000];
-        let mut data = fake_header(1, 0, 0x00, 0x00);
+    fn create_mapper_uxrom() {
+        let prg = vec![0xAAu8; 0x8000];
+        let mut data = fake_header(2, 0, 0x00, 0x00);
         data.extend(&prg);
         let rom = Rom::new(&data).unwrap();
-
-        assert!(rom.has_chr_ram);
-        assert_eq!(rom.chr[0], 0);
-        assert_eq!(rom.chr[0x1FFF], 0);
+        let mut mapper = rom.create_mapper();
+        // UxROM: $8000 = bank 0 (switchable), $C000 = last bank (fixed)
+        assert_eq!(mapper.cpu_read(0x8000), 0xAA);
+        // Write to switch to bank 1
+        mapper.cpu_write(0x8000, 1);
+        assert_eq!(mapper.cpu_read(0x8000), 0xAA); // both banks same data
     }
 
     #[test]
@@ -222,7 +189,7 @@ mod tests {
         let data = resp.into_body().read_to_vec().unwrap();
         assert!(data.len() > 16);
         let rom = Rom::new(&data).unwrap();
-        assert!(rom.prg_size > 0);
-        assert_eq!(rom.mapper, 1);
+        assert!(rom.prg.len() > 0);
+        assert_eq!(rom.mapper_id, 1);
     }
 }

@@ -1,21 +1,22 @@
 use crate::apu::Apu;
 use crate::controller::Gamepad;
+use crate::mapper::Mapper;
 use crate::ppu::Ppu;
 
-pub struct Bus<'a> {
+pub struct Bus {
     pub ram: [u8; 2048],
-    pub prg: &'a [u8],
+    pub mapper: Mapper,
     pub ppu: Ppu,
     pub apu: Apu,
     pub pad1: Gamepad,
 }
 
-impl<'a> Bus<'a> {
-    pub fn new(prg: &'a [u8], chr: &[u8], mirroring: u8) -> Self {
+impl Bus {
+    pub fn new(mapper: Mapper) -> Self {
         Self {
             ram: [0; 2048],
-            prg,
-            ppu: Ppu::new(chr, mirroring),
+            mapper,
+            ppu: Ppu::new(),
             apu: Apu::new(),
             pad1: Gamepad::new(),
         }
@@ -32,10 +33,10 @@ impl<'a> Bus<'a> {
                 _ => self.apu.read(addr),
             },
             _ => {
-                if addr < 0x8000 || self.prg.is_empty() {
-                    0
+                if addr >= 0x8000 {
+                    self.mapper.cpu_read(addr)
                 } else {
-                    self.prg[((addr - 0x8000) as usize) % self.prg.len()]
+                    0
                 }
             }
         }
@@ -55,7 +56,11 @@ impl<'a> Bus<'a> {
                 }
                 _ => self.apu.write(addr, val),
             },
-            _ => {}
+            _ => {
+                if addr >= 0x8000 {
+                    self.mapper.cpu_write(addr, val);
+                }
+            }
         }
     }
 
@@ -64,7 +69,7 @@ impl<'a> Bus<'a> {
         match addr & 7 {
             2 => self.ppu.read_status(),
             4 => self.ppu.read_oam_data(),
-            7 => self.ppu.read_data(),
+            7 => self.ppu.read_data(&mut self.mapper),
             _ => 0,
         }
     }
@@ -78,7 +83,7 @@ impl<'a> Bus<'a> {
             4 => self.ppu.write_oam_data(val),
             5 => self.ppu.write_scroll(val),
             6 => self.ppu.write_addr(val),
-            7 => self.ppu.write_data(val),
+            7 => self.ppu.write_data(val, &mut self.mapper),
             _ => {}
         }
     }
@@ -100,5 +105,29 @@ impl<'a> Bus<'a> {
         } else {
             false
         }
+    }
+
+    pub fn poll_mapper_irq(&mut self) -> bool {
+        if self.mapper.irq_pending() {
+            self.mapper.ack_irq();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Tick the PPU by `count` cycles with the mapper reference
+    pub fn ppu_tick(&mut self, count: u16) {
+        self.ppu.tick_batch(count, &mut self.mapper);
+    }
+
+    /// PPU read with mapper (for FFI / debuggers)
+    pub fn ppu_read_mapped(&mut self, addr: u16) -> u8 {
+        self.ppu.ppu_read(addr, &mut self.mapper)
+    }
+
+    /// PPU write with mapper (for FFI / debuggers)
+    pub fn ppu_write_mapped(&mut self, addr: u16, val: u8) {
+        self.ppu.ppu_write(addr, val, &mut self.mapper);
     }
 }
