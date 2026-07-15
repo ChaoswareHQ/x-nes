@@ -60,7 +60,7 @@ pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus<'_>) -> u8 {
     let cycles = TABLE[opcode as usize](cpu, bus);
 
     bus.ppu.tick_batch((cycles as u16) * 3);
-    bus.apu.tick(cycles);
+    bus.apu.tick(cycles as u16);
 
     if bus.poll_nmi() {
         nmi(cpu, bus);

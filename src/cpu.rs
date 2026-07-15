@@ -6,83 +6,88 @@ pub const FLAG_BREAK: u8     = 0b0001_0000;
 pub const FLAG_OVERFLOW: u8  = 0b0100_0000;
 pub const FLAG_NEGATIVE: u8  = 0b1000_0000;
 
-#[repr(C, align(2))]
+/// RP2A03 CPU register file.
+///
+/// Layout (repr(C), 8 bytes):
+///   0..2  pc  — Program Counter
+///   2     a   — Accumulator
+///   3     x   — Index Register X
+///   4     y   — Index Register Y
+///   5     st  — Stack Pointer (S)
+///   6     sr  — Status Register (P)
+///   7         — (padding for u16 alignment)
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CpuRp2a03 {
-    // Layout:
-    // 0..2  => PC (u16 - Program Counter)
-    // 2     => A  (u8  - Accumulator)
-    // 3     => X  (u8  - Index Register X)
-    // 4     => Y  (u8  - Index Register Y)
-    // 5     => ST (u8  - Stack Pointer)
-    // 6     => SR (u8  - Status Register 'P')
-    bytes: [u8; 7],
+    pub pc: u16,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub st: u8,
+    pub sr: u8,
 }
 
 impl CpuRp2a03 {
     pub fn new(reset_addr: u16) -> Self {
-        let mut cpu = Self::default();
-        cpu.set_pc(reset_addr);
-        cpu
+        Self {
+            pc: reset_addr,
+            ..Self::default()
+        }
     }
 
     #[inline(always)]
     pub fn pc(&self) -> u16 {
-        u16::from_le_bytes([self.bytes[0], self.bytes[1]])
+        self.pc
     }
 
     #[inline(always)]
     pub fn set_pc(&mut self, val: u16) {
-        let le = val.to_le_bytes();
-        self.bytes[0] = le[0];
-        self.bytes[1] = le[1];
+        self.pc = val;
     }
-    
+
     #[inline(always)]
     pub fn advance_pc(&mut self, n: u16) {
-        let next = self.pc().wrapping_add(n).to_le_bytes();
-        self.bytes[0] = next[0];
-        self.bytes[1] = next[1];
+        self.pc = self.pc.wrapping_add(n);
     }
 
     #[inline(always)]
-    pub fn a(&self) -> u8 { self.bytes[2] }
+    pub fn a(&self) -> u8 { self.a }
 
     #[inline(always)]
-    pub fn set_a(&mut self, val: u8) { self.bytes[2] = val; }
+    pub fn set_a(&mut self, val: u8) { self.a = val; }
 
     #[inline(always)]
-    pub fn x(&self) -> u8 { self.bytes[3] }
+    pub fn x(&self) -> u8 { self.x }
 
     #[inline(always)]
-    pub fn set_x(&mut self, val: u8) { self.bytes[3] = val; }
+    pub fn set_x(&mut self, val: u8) { self.x = val; }
 
     #[inline(always)]
-    pub fn y(&self) -> u8 { self.bytes[4] }
+    pub fn y(&self) -> u8 { self.y }
 
     #[inline(always)]
-    pub fn set_y(&mut self, val: u8) { self.bytes[4] = val; }
+    pub fn set_y(&mut self, val: u8) { self.y = val; }
 
     #[inline(always)]
-    pub fn st(&self) -> u8 { self.bytes[5] }
+    pub fn st(&self) -> u8 { self.st }
 
     #[inline(always)]
-    pub fn set_st(&mut self, val: u8) { self.bytes[5] = val; }
+    pub fn set_st(&mut self, val: u8) { self.st = val; }
 
     #[inline(always)]
-    pub fn sr(&self) -> u8 { self.bytes[6] }
+    pub fn sr(&self) -> u8 { self.sr }
 
     #[inline(always)]
-    pub fn set_sr(&mut self, val: u8) { self.bytes[6] = val; }
+    pub fn set_sr(&mut self, val: u8) { self.sr = val; }
 
     #[inline(always)]
     pub fn get_flag(&self, flag: u8) -> bool {
-        (self.bytes[6] & flag) != 0
+        self.sr & flag != 0
     }
 
     #[inline(always)]
     pub fn set_flag(&mut self, flag: u8, set: bool) {
-        self.bytes[6] = (self.bytes[6] & !flag) | (flag & (set as u8).wrapping_neg());
+        self.sr = (self.sr & !flag) | (flag & (set as u8).wrapping_neg());
     }
 
     #[inline(always)]
@@ -97,22 +102,20 @@ impl CpuRp2a03 {
 
     #[inline(always)]
     pub fn update_zn_flags(&mut self, val: u8) {
-        self.bytes[6] &= !(FLAG_NEGATIVE | FLAG_ZERO);
-        if val == 0 { self.bytes[6] |= FLAG_ZERO; }
-        if (val & 0x80) != 0 { self.bytes[6] |= FLAG_NEGATIVE; }
-    }
-
-    pub fn as_bytes(&self) -> &[u8; 7] {
-        &self.bytes
-    }
-
-    pub fn from_bytes(bytes: &[u8; 7]) -> Self {
-        Self { bytes: *bytes }
+        let z = (val == 0) as u8;
+        self.sr = (self.sr & 0x7D) | (z.wrapping_neg() & FLAG_ZERO) | (val & FLAG_NEGATIVE);
     }
 }
 
 impl Default for CpuRp2a03 {
     fn default() -> Self {
-        Self { bytes: [0; 7] }
+        Self {
+            pc: 0,
+            a: 0,
+            x: 0,
+            y: 0,
+            st: 0,
+            sr: 0,
+        }
     }
 }
