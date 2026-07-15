@@ -82,11 +82,7 @@ impl CpuRp2a03 {
 
     #[inline(always)]
     pub fn set_flag(&mut self, flag: u8, set: bool) {
-        if set {
-            self.bytes[6] |= flag;
-        } else {
-            self.bytes[6] &= !flag;
-        }
+        self.bytes[6] = (self.bytes[6] & !flag) | (flag & (set as u8).wrapping_neg());
     }
 
     #[inline(always)]
