@@ -59,19 +59,17 @@ impl Pulse {
             self.env_start = false;
             self.env_decay = 15;
             self.env_divider = self.vol;
-        } else {
-            if self.env_divider == 0 {
-                self.env_divider = self.vol;
-                if self.env_decay == 0 {
-                    if self.length_halt {
-                        self.env_decay = 15;
-                    }
-                } else {
-                    self.env_decay -= 1;
+        } else if self.env_divider == 0 {
+            self.env_divider = self.vol;
+            if self.env_decay == 0 {
+                if self.length_halt {
+                    self.env_decay = 15;
                 }
             } else {
-                self.env_divider -= 1;
+                self.env_decay -= 1;
             }
+        } else {
+            self.env_divider -= 1;
         }
     }
 
@@ -211,10 +209,8 @@ impl Dmc {
             if self.output_level <= 125 {
                 self.output_level += 2;
             }
-        } else {
-            if self.output_level >= 2 {
-                self.output_level -= 2;
-            }
+        } else if self.output_level >= 2 {
+            self.output_level -= 2;
         }
 
         if self.bits_remaining == 0 {
