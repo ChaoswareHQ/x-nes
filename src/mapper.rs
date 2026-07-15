@@ -299,7 +299,7 @@ impl Mmc1 {
             chr1: 0,
             prg_bank: 0,
             prg_ram: [0; 0x2000],
-            prg_ram_enable: false,
+            prg_ram_enable: true,
             has_chr_ram: chr_ram,
         }
     }
@@ -326,13 +326,8 @@ impl Mmc1 {
         match addr & 0xE000 {
             0x8000 => {
                 self.control = self.shift;
-                self.mirror = self.control & 3;
-                if self.mirror == 2 {
-                    self.mirror = 0;
-                }
-                if self.mirror == 3 {
-                    self.mirror = 1;
-                }
+                // Ignore mirroring bits from control register;
+                // use the iNES header mirroring (set in new())
             }
             0xA000 => self.chr0 = (self.shift) & 0x1F,
             0xC000 => self.chr1 = (self.shift) & 0x1F,

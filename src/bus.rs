@@ -33,7 +33,7 @@ impl Bus {
                 _ => self.apu.read(addr),
             },
             _ => {
-                if addr >= 0x8000 {
+                if addr >= 0x6000 {
                     self.mapper.cpu_read(addr)
                 } else {
                     0
@@ -57,7 +57,7 @@ impl Bus {
                 _ => self.apu.write(addr, val),
             },
             _ => {
-                if addr >= 0x8000 {
+                if addr >= 0x6000 {
                     self.mapper.cpu_write(addr, val);
                 }
             }

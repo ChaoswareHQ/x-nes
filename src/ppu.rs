@@ -214,7 +214,6 @@ impl Ppu {
 
         if sl == VBLANK_START && cy == 1 {
             self.status |= 0x80;
-            self.status |= 0x40;
             self.vset = true;
             if self.ctrl & 0x80 != 0 {
                 self.nmi_pending = true;
