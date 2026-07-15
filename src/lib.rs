@@ -57,10 +57,13 @@ use ops::TABLE;
 pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let opcode = bus.read(cpu.pc());
     cpu.set_pc(cpu.pc().wrapping_add(1));
-    let cycles = TABLE[opcode as usize](cpu, bus);
+    let mut cycles = TABLE[opcode as usize](cpu, bus);
 
     bus.ppu_tick((cycles as u16) * 3);
     bus.apu.tick(cycles as u16);
+
+    // Handle DMC DMA if pending (runs between instructions)
+    cycles += bus.dmc_tick();
 
     if bus.poll_nmi() {
         nmi(cpu, bus);
@@ -70,6 +73,8 @@ pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
 }
 
 pub fn nmi(cpu: &mut CpuRp2a03, bus: &mut Bus) {
+    // NMI takes 7 CPU cycles on the NES (21 PPU cycles)
+    // Push PCH (2), Push PCL (2), Push SR (2), Read vector (1)
     crate::ops::push(cpu, bus, (cpu.pc() >> 8) as u8);
     crate::ops::push(cpu, bus, cpu.pc() as u8);
     let sr = cpu.sr() | 0x20;
@@ -78,6 +83,8 @@ pub fn nmi(cpu: &mut CpuRp2a03, bus: &mut Bus) {
     let lo = bus.read(0xFFFA) as u16;
     let hi = bus.read(0xFFFB) as u16;
     cpu.set_pc(lo | (hi << 8));
+    // Advance PPU by 21 cycles to account for NMI handling
+    bus.ppu_tick(21);
 }
 
 pub fn reset(cpu: &mut CpuRp2a03, bus: &mut Bus) {

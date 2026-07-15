@@ -31,8 +31,6 @@ pub struct Ppu {
 
     sprite_count: u8,
     sprite_indices: [u8; 8],
-    sprite_zero_on_scanline: bool,
-    prev_scanline_had_sprite_zero: bool,
     sprite_zero_hit_possible: bool,
     vset: bool,
     vset_latch1: bool,
@@ -62,8 +60,6 @@ impl Ppu {
             odd_frame: true,
             sprite_count: 0,
             sprite_indices: [0; 8],
-            sprite_zero_on_scanline: false,
-            prev_scanline_had_sprite_zero: false,
             sprite_zero_hit_possible: true,
             vset: false,
             vset_latch1: false,
@@ -133,13 +129,14 @@ impl Ppu {
         }
     }
 
+    /// Returns `(colour, sp0_pixel)` — `sp0_pixel` is non-zero when sprite 0 has a visible pixel here
     fn render_sprite_pixel(
         &self,
         x: u16,
         bg_pixel: u8,
         bg_color: u8,
         mapper: &mut Mapper,
-    ) -> (u8, bool) {
+    ) -> (u8, u8) {
         let use_16 = self.ctrl & 0x20 != 0;
         let sprite_h = if use_16 { 16 } else { 8 };
         let sl = self.scanline;
@@ -157,26 +154,30 @@ impl Ppu {
             let behind = attr & 0x20 != 0;
             let flip_x = attr & 0x40 != 0;
             let flip_y = attr & 0x80 != 0;
-            let sy_off = sl - sy;
+            let sy_off = sl.wrapping_sub(sy) as u8;
             let pixel_y = if flip_y {
-                sprite_h - 1 - sy_off
+                (sprite_h as u8).wrapping_sub(1).wrapping_sub(sy_off)
             } else {
                 sy_off
             };
-            let pixel_x = if flip_x { 7 - (x - sx) } else { x - sx };
+            let pixel_x = if flip_x {
+                7u8.wrapping_sub(x.wrapping_sub(sx) as u8)
+            } else {
+                x.wrapping_sub(sx) as u8
+            };
             let tile_addr = if use_16 {
                 let bank = if tile & 1 != 0 { 0x1000 } else { 0x0000 };
                 let base_tile = tile & 0xFE;
                 let bottom = u16::from(pixel_y >= 8);
                 let fine_y = pixel_y & 7;
-                bank | ((base_tile + bottom) << 4) | fine_y
+                bank | ((base_tile + bottom) << 4) | fine_y as u16
             } else {
                 let bank = if self.ctrl & 0x08 != 0 {
                     0x1000
                 } else {
                     0x0000
                 };
-                bank | (tile << 4) | pixel_y
+                bank | (tile << 4) | pixel_y as u16
             };
             let low = mapper.ppu_read(tile_addr);
             let high = mapper.ppu_read(tile_addr | 8);
@@ -185,16 +186,16 @@ impl Ppu {
             if pixel == 0 {
                 continue;
             }
-            let hit = idx == 0 && bg_pixel != 0 && x != 255;
+            let sp0_here = if idx == 0 { pixel } else { 0 };
             if behind && bg_pixel != 0 {
-                return (bg_color, hit);
+                return (bg_color, sp0_here);
             }
             return (
                 self.palette[0x10 | ((palette_bits as usize) << 2) | pixel as usize],
-                hit,
+                sp0_here,
             );
         }
-        (bg_color, false)
+        (bg_color, 0)
     }
 
     pub fn tick(&mut self, mapper: &mut Mapper) {
@@ -217,9 +218,6 @@ impl Ppu {
             self.vset = true;
             if self.ctrl & 0x80 != 0 {
                 self.nmi_pending = true;
-            }
-            if !self.rendering_enabled() {
-                self.frame_complete = true;
             }
         }
 
@@ -260,8 +258,6 @@ impl Ppu {
 
     fn evaluate_sprites(&mut self, sl: u16) {
         self.sprite_count = 0;
-        self.prev_scanline_had_sprite_zero = self.sprite_zero_on_scanline;
-        self.sprite_zero_on_scanline = false;
         if self.mask & 0x10 == 0 {
             return;
         }
@@ -272,9 +268,6 @@ impl Ppu {
                 if self.sprite_count < 8 {
                     let idx = self.sprite_count as usize;
                     self.sprite_indices[idx] = (i >> 2) as u8;
-                    if i == 0 {
-                        self.sprite_zero_on_scanline = true;
-                    }
                     self.sprite_count += 1;
                 } else {
                     self.status |= 0x20;
@@ -291,16 +284,19 @@ impl Ppu {
         } else {
             self.get_bg_pixel(x, y, mapper)
         };
-
-        if self.mask & 0x10 != 0 && (self.mask & 0x04 != 0 || x >= 8) {
-            let (colour, hit) = self.render_sprite_pixel(x, bg_pixel, bg_colour, mapper);
-            if hit && self.mask & 0x08 != 0 {
+        let colour = if self.mask & 0x10 != 0 && (self.mask & 0x04 != 0 || x >= 8) {
+            let (sprite_colour, sp0_pixel) =
+                self.render_sprite_pixel(x, bg_pixel, bg_colour, mapper);
+            // Sprite 0 hit: bg and sprite both non-zero, once per frame, not at pixel 255
+            if sp0_pixel != 0 && bg_pixel != 0 && x != 255 && self.sprite_zero_hit_possible {
                 self.status |= 0x40;
+                self.sprite_zero_hit_possible = false;
             }
-            self.frame[(y as usize) * 256 + (x as usize)] = colour;
+            sprite_colour
         } else {
-            self.frame[(y as usize) * 256 + (x as usize)] = bg_colour;
-        }
+            bg_colour
+        };
+        self.frame[(y as usize) * 256 + (x as usize)] = colour;
     }
 
     pub fn tick_batch(&mut self, mut count: u16, mapper: &mut Mapper) {
@@ -444,7 +440,6 @@ impl Ppu {
             .wrapping_add(if self.ctrl & 0x04 != 0 { 32 } else { 1 });
     }
 
-    /// Read any PPU address (used by debuggers / FFI)
     pub fn ppu_read(&mut self, addr: u16, mapper: &mut Mapper) -> u8 {
         if addr < 0x2000 {
             mapper.ppu_read(addr)
@@ -453,7 +448,6 @@ impl Ppu {
         }
     }
 
-    /// Write any PPU address (used by debuggers / FFI)
     pub fn ppu_write(&mut self, addr: u16, val: u8, mapper: &mut Mapper) {
         if addr < 0x2000 {
             mapper.ppu_write(addr, val);

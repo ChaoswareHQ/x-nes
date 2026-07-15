@@ -32,14 +32,14 @@ mod addr_modes {
     pub fn absx(cpu: &CpuRp2a03, bus: &mut Bus) -> (u16, u8) {
         let base = abs(cpu, bus);
         let addr = base.wrapping_add(cpu.x() as u16);
-        (addr, ((base ^ addr) >> 8) as u8)
+        (addr, (((base ^ addr) >> 8) as u8) & 1)
     }
 
     #[inline(always)]
     pub fn absy(cpu: &CpuRp2a03, bus: &mut Bus) -> (u16, u8) {
         let base = abs(cpu, bus);
         let addr = base.wrapping_add(cpu.y() as u16);
-        (addr, ((base ^ addr) >> 8) as u8)
+        (addr, (((base ^ addr) >> 8) as u8) & 1)
     }
 
     #[inline(always)]
@@ -70,7 +70,7 @@ mod addr_modes {
         let ptr = bus.read(cpu.pc()) as u16;
         let base = bus.read(ptr) as u16 | (bus.read(ptr.wrapping_add(1)) as u16) << 8;
         let addr = base.wrapping_add(cpu.y() as u16);
-        (addr, ((base ^ addr) >> 8) as u8)
+        (addr, (((base ^ addr) >> 8) as u8) & 1)
     }
 }
 
@@ -1231,7 +1231,7 @@ mod op {
             let old_pc = cpu.pc();
             let new_pc = old_pc.wrapping_add(disp);
             cpu.set_pc(new_pc);
-            2 + 1 + ((old_pc ^ new_pc) >> 8) as u8
+            2 + 1 + (((old_pc ^ new_pc) >> 8) as u8 & 1)
         } else {
             2
         }

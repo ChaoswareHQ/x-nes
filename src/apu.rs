@@ -228,6 +228,16 @@ impl Dmc {
         false
     }
 
+    /// Check if DMC DMA needs to read a byte, and return the address to read from.
+    /// Returns None if no DMA is needed.
+    pub fn poll_dma(&self) -> Option<u16> {
+        if self.dma_needed && self.bytes_remaining > 0 {
+            Some(self.sample_addr)
+        } else {
+            None
+        }
+    }
+
     /// Called when DMC DMA reads a byte from memory
     fn dma_read(&mut self, val: u8) {
         self.sample_buffer = val;

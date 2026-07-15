@@ -116,6 +116,23 @@ impl Bus {
         }
     }
 
+    /// Check and perform DMC DMA if needed.
+    /// Returns the number of extra CPU cycles consumed by DMA
+    /// (0 for no DMA, 3-4 for a DMA cycle)
+    pub fn dmc_tick(&mut self) -> u8 {
+        if self.apu.dmc_dma_pending() {
+            let addr = self.apu.dmc_sample_address();
+            let val = self.mapper.cpu_read(addr);
+            self.apu.dmc_complete_dma(val);
+            // DMC DMA steals 4 CPU cycles (affects PPU timing)
+            // The APU already advanced from the parent tick call
+            self.ppu_tick(12);
+            4
+        } else {
+            0
+        }
+    }
+
     /// Tick the PPU by `count` cycles with the mapper reference
     pub fn ppu_tick(&mut self, count: u16) {
         self.ppu.tick_batch(count, &mut self.mapper);
