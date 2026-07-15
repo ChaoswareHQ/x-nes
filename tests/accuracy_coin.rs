@@ -309,6 +309,27 @@ fn accuracy_coin_run_all_tests() {
         pc, frames, cycles
     );
 
+    // Read detailed RAM for debugging
+    println!("\n=== Debug RAM Dump ===");
+    for (addr, name) in &[
+        (0xCA, "$CA"),
+        (0x2EA, "$02EA"),
+        (0x56, "$56"),
+        (0x08, "open bus"),
+        (0x10, "ErrorCode"),
+        (0x50, "$50"),
+        (0x51, "$51"),
+        (0x52, "$52"),
+        (0xFA, "Copy_SP"),
+        (0xFB, "Copy_SP2"),
+        (0xFC, "Copy_Flags"),
+        (0xFD, "Copy_X"),
+        (0xFE, "Copy_Y"),
+        (0xFF, "Copy_A"),
+    ] {
+        println!("  {} = ${:02X}", name, runner.read_ram(*addr));
+    }
+
     // Read results
     let results = runner.dump_results();
     println!("\n=== AccuracyCoin Test Results ===");

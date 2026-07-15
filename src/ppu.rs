@@ -21,6 +21,8 @@ pub struct Ppu {
     pub w: u8,
 
     pub data_buffer: u8,
+    /// Last value written to any PPU register (for open bus reads)
+    pub last_bus_value: u8,
 
     pub scanline: u16,
     pub cycle: u16,
@@ -52,6 +54,7 @@ impl Ppu {
             fine_x: 0,
             w: 0,
             data_buffer: 0,
+            last_bus_value: 0,
             scanline: 0,
             cycle: 0,
             nmi_pending: false,
@@ -301,13 +304,11 @@ impl Ppu {
 
     pub fn tick_batch(&mut self, mut count: u16, mapper: &mut Mapper) {
         while count > 0 {
-            let sl = self.scanline;
             let cy = self.cycle;
-            if sl < VISIBLE_SCANLINES && cy >= 257 && cy <= 340 {
-                let skip = (341 - cy).min(count);
-                self.cycle = cy + skip;
-                count -= skip;
-                continue;
+            if cy >= 257 && cy <= 340 && self.rendering_or_prerender() {
+                // During HBlank (cycles 257-340), sprite evaluation data is loaded
+                // but no pixels are rendered. Still need to advance cycles for
+                // proper VBlank timing.
             }
             self.tick(mapper);
             count -= 1;
@@ -360,7 +361,10 @@ impl Ppu {
         let s = self.status;
         self.status &= !0x80;
         self.w = 0;
-        s
+        // Lower 5 bits come from PPU data bus (open bus)
+        let result = (s & 0xE0) | (self.last_bus_value & 0x1F);
+        self.last_bus_value = result;
+        result
     }
 
     pub fn read_data(&mut self, mapper: &mut Mapper) -> u8 {
@@ -381,6 +385,7 @@ impl Ppu {
     }
 
     pub fn write_ctrl(&mut self, val: u8) {
+        self.last_bus_value = val;
         let was_nmi = self.ctrl & 0x80 != 0;
         self.ctrl = val;
         self.t = (self.t & 0xF3FF) | ((val as u16 & 3) << 10);
@@ -390,13 +395,16 @@ impl Ppu {
     }
 
     pub fn write_mask(&mut self, val: u8) {
+        self.last_bus_value = val;
         self.mask = val;
     }
     pub fn write_oam_addr(&mut self, val: u8) {
+        self.last_bus_value = val;
         self.oam_addr = val;
     }
 
     pub fn write_oam_data(&mut self, val: u8) {
+        self.last_bus_value = val;
         self.oam[self.oam_addr as usize] = val;
         self.oam_addr = self.oam_addr.wrapping_add(1);
     }
@@ -406,6 +414,7 @@ impl Ppu {
     }
 
     pub fn write_scroll(&mut self, val: u8) {
+        self.last_bus_value = val;
         if self.w == 0 {
             self.t = (self.t & 0xFFE0) | ((val >> 3) as u16);
             self.fine_x = val & 7;
@@ -418,6 +427,7 @@ impl Ppu {
     }
 
     pub fn write_addr(&mut self, val: u8) {
+        self.last_bus_value = val;
         if self.w == 0 {
             self.t = ((self.t & 0x00FF) | ((val as u16) << 8)) & 0x3FFF;
             self.w = 1;
@@ -429,6 +439,7 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, val: u8, mapper: &mut Mapper) {
+        self.last_bus_value = val;
         let addr = self.v & 0x3FFF;
         if addr < 0x2000 {
             mapper.ppu_write(addr, val);

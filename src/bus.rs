@@ -9,6 +9,11 @@ pub struct Bus {
     pub ppu: Ppu,
     pub apu: Apu,
     pub pad1: Gamepad,
+    /// Tracks last value on the data bus for open bus reads
+    open_bus: u8,
+    /// Set to true when DMC DMA fires between instructions
+    /// Used by SHA/SHS/SHY/SHX to know if H should be ignored
+    pub dmc_just_fired: bool,
 }
 
 impl Bus {
@@ -19,27 +24,75 @@ impl Bus {
             ppu: Ppu::new(),
             apu: Apu::new(),
             pad1: Gamepad::new(),
+            open_bus: 0,
+            dmc_just_fired: false,
         }
     }
 
     #[inline(always)]
-    pub fn read(&mut self, addr: u16) -> u8 {
+    fn read_mapped(&mut self, addr: u16) -> u8 {
         let top = (addr >> 12) as u8;
         match top {
             0 | 1 => self.ram[(addr & 0x07FF) as usize],
             2 | 3 => self.read_ppu(addr),
-            4 if addr < 0x4020 => match addr {
-                0x4016 => self.pad1.read(),
-                _ => self.apu.read(addr),
+            4 if addr < 0x4018 => match addr {
+                // $4015 returns APU status, but bit 5 is open bus (from data bus)
+                0x4015 => self.apu.read(addr) | (self.open_bus & 0x20),
+                0x4016 => (self.pad1.read() & 0x1F) | (self.open_bus & 0xE0) | 0x40,
+                // $4017 reads controller 2 - no pad2 yet, return 0 for bits 0-4
+                // Upper 3 bits are open bus from data bus
+                0x4017 => (self.open_bus & 0xE0) | 0x40,
+                // $4000-$4014 ($4015 handled above) are write-only APU registers
+                // Reading write-only APU registers returns open bus
+                _ => self.open_bus,
             },
+            4 if addr < 0x4020 => {
+                // $4018-$401F: open bus, mirrors of APU registers
+                self.open_bus
+            }
             _ => {
                 if addr >= 0x6000 {
                     self.mapper.cpu_read(addr)
+                } else if addr >= 0x4000 {
+                    // $4020-$5FFF: open bus range
+                    self.open_bus
                 } else {
                     0
                 }
             }
         }
+    }
+
+    #[inline(always)]
+    pub fn read(&mut self, addr: u16) -> u8 {
+        let val = self.read_mapped(addr);
+        // Update open bus tracking
+        // Only $4015 and $4016 return actual register data that drives the bus.
+        // Write-only APU registers ($4000-$4014, $4017) return open bus
+        // without updating it.
+        let top = (addr >> 12) as u8;
+        let is_open_bus = match addr {
+            // $4015 returns APU status but does NOT drive the external data bus
+            // (APU has an internal data path)
+            0x4015 => true,
+            // $4016 returns controller data - drives the data bus
+            0x4016 => false,
+            // $4000-$4014, $4017 are write-only - don't drive the data bus
+            _ if top == 4 && addr < 0x4018 => true,
+            // $4018-$401F are mirror APU registers - open bus
+            _ if top == 4 && addr >= 0x4018 && addr < 0x4020 => true,
+            // $4020-$5FFF: open bus range
+            _ if top == 4 && addr >= 0x4020 && addr < 0x6000 => true,
+            // Regular RAM/ROM reads drive the data bus
+            _ if addr < 0x4000 => false,
+            // $6000+ reads from mapper drive the data bus
+            _ if addr >= 0x6000 => false,
+            _ => true,
+        };
+        if !is_open_bus {
+            self.open_bus = val;
+        }
+        val
     }
 
     #[inline(always)]
@@ -62,6 +115,14 @@ impl Bus {
                 }
             }
         }
+        // Writes update the open bus value (CPU drives the data bus).
+        // Stack writes ($100-$1FF) are excluded - the 6502's internal
+        // bus transactions during JSR pushes don't propagate.
+        // NOTE: top = addr >> 12, so $0100-$01FF gives top=0 (not 1!).
+        // Check the actual page using (addr & 0xFF00) != 0x0100.
+        if (addr & 0xFF00) != 0x0100 {
+            self.open_bus = val;
+        }
     }
 
     #[inline(always)]
@@ -70,7 +131,8 @@ impl Bus {
             2 => self.ppu.read_status(),
             4 => self.ppu.read_oam_data(),
             7 => self.ppu.read_data(&mut self.mapper),
-            _ => 0,
+            // Write-only registers return PPU open bus (last written value)
+            _ => self.ppu.last_bus_value,
         }
     }
 
@@ -86,6 +148,8 @@ impl Bus {
             7 => self.ppu.write_data(val, &mut self.mapper),
             _ => {}
         }
+        // All writes to PPU registers update the internal data bus
+        self.ppu.last_bus_value = val;
     }
 
     fn oam_dma(&mut self, page: u8) {
@@ -107,13 +171,18 @@ impl Bus {
         }
     }
 
-    pub fn poll_mapper_irq(&mut self) -> bool {
+    pub fn poll_irq(&mut self) -> bool {
+        // Check APU (frame counter) IRQ first
+        if self.apu.apu_irq_pending() {
+            // Don't acknowledge here - $4015 read does that
+            return true;
+        }
+        // Then check mapper IRQ
         if self.mapper.irq_pending() {
             self.mapper.ack_irq();
-            true
-        } else {
-            false
+            return true;
         }
+        false
     }
 
     /// Check and perform DMC DMA if needed.
@@ -124,8 +193,11 @@ impl Bus {
             let addr = self.apu.dmc_sample_address();
             let val = self.mapper.cpu_read(addr);
             self.apu.dmc_complete_dma(val);
+            // DMC DMA reads a byte from memory like a CPU read
+            self.open_bus = val;
+            // Flag that a DMA just fired (for SHA/SHS/SHY/SHX IgnoreH)
+            self.dmc_just_fired = true;
             // DMC DMA steals 4 CPU cycles (affects PPU timing)
-            // The APU already advanced from the parent tick call
             self.ppu_tick(12);
             4
         } else {

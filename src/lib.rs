@@ -51,7 +51,7 @@ pub mod ppu;
 pub mod rom;
 
 use bus::Bus;
-use cpu::{CpuRp2a03, FLAG_INTERRUPT};
+use cpu::{CpuRp2a03, FLAG_BREAK, FLAG_INTERRUPT};
 use ops::TABLE;
 
 pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
@@ -67,6 +67,8 @@ pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
 
     if bus.poll_nmi() {
         nmi(cpu, bus);
+    } else if !cpu.get_flag(FLAG_INTERRUPT) && bus.poll_irq() {
+        irq(cpu, bus);
     }
 
     cycles
@@ -77,13 +79,28 @@ pub fn nmi(cpu: &mut CpuRp2a03, bus: &mut Bus) {
     // Push PCH (2), Push PCL (2), Push SR (2), Read vector (1)
     crate::ops::push(cpu, bus, (cpu.pc() >> 8) as u8);
     crate::ops::push(cpu, bus, cpu.pc() as u8);
-    let sr = cpu.sr() | 0x20;
+    // NMI pushes with B flag CLEAR (bit 4 = 0), bit 5 always SET
+    let sr = (cpu.sr() & !FLAG_BREAK) | 0x20;
     crate::ops::push(cpu, bus, sr);
     cpu.set_flag(FLAG_INTERRUPT, true);
     let lo = bus.read(0xFFFA) as u16;
     let hi = bus.read(0xFFFB) as u16;
     cpu.set_pc(lo | (hi << 8));
     // Advance PPU by 21 cycles to account for NMI handling
+    bus.ppu_tick(21);
+}
+
+pub fn irq(cpu: &mut CpuRp2a03, bus: &mut Bus) {
+    // IRQ takes 7 CPU cycles on the NES
+    // Push PCH, PCL, SR (B flag CLEAR, bit 5 SET), Read vector
+    crate::ops::push(cpu, bus, (cpu.pc() >> 8) as u8);
+    crate::ops::push(cpu, bus, cpu.pc() as u8);
+    let sr = (cpu.sr() & !FLAG_BREAK) | 0x20;
+    crate::ops::push(cpu, bus, sr);
+    cpu.set_flag(FLAG_INTERRUPT, true);
+    let lo = bus.read(0xFFFE) as u16;
+    let hi = bus.read(0xFFFF) as u16;
+    cpu.set_pc(lo | (hi << 8));
     bus.ppu_tick(21);
 }
 

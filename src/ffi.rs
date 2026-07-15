@@ -5,13 +5,12 @@
     dead_code
 )]
 
-use core::mem::{MaybeUninit, transmute};
+use core::mem::MaybeUninit;
 use core::ptr::{addr_of, addr_of_mut};
 use core::slice;
 
 use crate::bus::Bus;
 use crate::cpu::CpuRp2a03;
-use crate::mapper::Mapper;
 use crate::rom::Rom;
 use crate::{reset, tick};
 

@@ -324,9 +324,32 @@ impl Apu {
         self.dmc.dma_needed
     }
 
+    /// Check if a DMC DMA would fire within `cpu_cycles` CPU cycles
+    /// (used by SHA/SHS/SHY/SHX for IgnoreH behavior - when a DMA occurs
+    ///  just before the write cycle, the H value is ignored)
+    pub fn dmc_dma_imminent(&self, cpu_cycles: u16) -> bool {
+        if self.dmc.dma_needed {
+            return true;
+        }
+        if self.dmc.enabled {
+            // DMC is enabled. A DMA is imminent if:
+            // 1. There are still bytes to read AND timer is low, OR
+            // 2. Looping is enabled (sample auto-restarts) AND timer is low
+            let will_have_bytes = self.dmc.bytes_remaining > 0 || self.dmc.loop_flag;
+            if will_have_bytes && self.dmc.timer <= cpu_cycles {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Complete a DMC DMA read. `val` is the byte read from the sample address.
     pub fn dmc_complete_dma(&mut self, val: u8) {
         self.dmc.dma_read(val);
+    }
+
+    pub fn apu_irq_pending(&self) -> bool {
+        self.frame_irq
     }
 
     pub fn dmc_sample_address(&self) -> u16 {

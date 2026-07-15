@@ -30,6 +30,9 @@ impl Gamepad {
     }
 
     fn latch(&mut self) {
+        // NES controller serial output order (first read = bit 0, etc.):
+        // A (0x01), B (0x02), Select (0x04), Start (0x08),
+        // Up (0x10), Down (0x20), Left (0x40), Right (0x80)
         self.buttons[0] = 0;
         self.buttons[1] = 0;
         if self.a {
