@@ -7,6 +7,7 @@ use nes::rom::Rom;
 use nes::{reset, tick};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use gilrs::{Button, Gilrs};
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Producer, Split};
 use softbuffer::{Context, Surface};
@@ -72,6 +73,7 @@ struct App {
     frame_timer: Instant,
     frame_dur: Duration,
     acc: Duration,
+    gilrs: Gilrs,
     audio_stream: Option<cpal::Stream>,
     audio_tx: Option<
         ringbuf::CachingProd<std::sync::Arc<ringbuf::SharedRb<ringbuf::storage::Heap<f32>>>>,
@@ -91,6 +93,7 @@ impl App {
         Self {
             cpu,
             bus,
+            gilrs: Gilrs::new().expect("failed to initialize gilrs"),
             window: None,
             ctx: None,
             surface: None,
@@ -261,6 +264,40 @@ impl ApplicationHandler for App {
                     let _pushed = tx.push_slice(&self.bus.apu.audio_samples[..n]);
                 }
                 self.bus.apu.sample_count = 0;
+            }
+        }
+
+        // Poll game controller
+        while let Some(gilrs::Event {
+            id: _,
+            event,
+            time: _,
+        }) = self.gilrs.next_event()
+        {
+            match event {
+                gilrs::EventType::ButtonChanged(button, val, _) => {
+                    let pressed = val > 0.5;
+                    match button {
+                        Button::South => self.bus.pad1.a = pressed, // A
+                        Button::East => self.bus.pad1.b = pressed,  // B
+                        Button::West => self.bus.pad1.b = pressed,  // X -> B
+                        Button::North => self.bus.pad1.a = pressed, // Y -> A
+                        Button::DPadUp => self.bus.pad1.up = pressed,
+                        Button::DPadDown => self.bus.pad1.down = pressed,
+                        Button::DPadLeft => self.bus.pad1.left = pressed,
+                        Button::DPadRight => self.bus.pad1.right = pressed,
+                        Button::Select => self.bus.pad1.select = pressed,
+                        Button::Start => self.bus.pad1.start = pressed,
+                        Button::LeftTrigger | Button::RightTrigger => {
+                            self.bus.pad1.a = pressed;
+                        }
+                        Button::LeftTrigger2 | Button::RightTrigger2 => {
+                            self.bus.pad1.b = pressed;
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
             }
         }
 
