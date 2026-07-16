@@ -34,6 +34,14 @@ path = "examples/main.rs"
 name = "window"
 path = "examples/window.rs"
 
+[[example]]
+name = "netplay"
+path = "examples/netplay.rs"
+
+[[example]]
+name = "dual"
+path = "examples/dual.rs"
+
 [dev-dependencies]
 softbuffer = "0.4.8"
 winit = "0.30.13"
