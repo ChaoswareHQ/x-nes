@@ -7,6 +7,7 @@ pub struct Nrom {
     chr_ram: bool,
     mirror: u8,
     prg_size: usize,
+    prg_ram: [u8; 0x2000],
 }
 
 impl Nrom {
@@ -33,6 +34,7 @@ impl Nrom {
             chr_ram,
             mirror,
             prg_size: prg.len(),
+            prg_ram: [0; 0x2000],
         }
     }
 }
@@ -40,6 +42,7 @@ impl Nrom {
 impl MapperImpl for Nrom {
     fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
+            0x6000..=0x7FFF => self.prg_ram[(addr & 0x1FFF) as usize],
             0x8000..=0xFFFF => {
                 let idx = (addr & 0x7FFF) as usize;
                 if self.prg_size <= 0x4000 && idx >= 0x4000 {
@@ -52,7 +55,11 @@ impl MapperImpl for Nrom {
         }
     }
 
-    fn cpu_write(&mut self, _addr: u16, _val: u8) {}
+    fn cpu_write(&mut self, addr: u16, val: u8) {
+        if let 0x6000..=0x7FFF = addr {
+            self.prg_ram[(addr & 0x1FFF) as usize] = val;
+        }
+    }
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
         match addr & 0x3FFF {

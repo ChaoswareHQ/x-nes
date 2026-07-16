@@ -254,10 +254,10 @@ impl Noise {
             // Clock LFSR
             let feedback = if self.mode {
                 // Mode 1: feedback from bits 0 and 6
-                ((self.lfsr >> 0) ^ (self.lfsr >> 6)) & 1
+                (self.lfsr ^ (self.lfsr >> 6)) & 1
             } else {
                 // Mode 0: feedback from bits 0 and 1
-                ((self.lfsr >> 0) ^ (self.lfsr >> 1)) & 1
+                (self.lfsr ^ (self.lfsr >> 1)) & 1
             };
             self.lfsr = (self.lfsr >> 1) | (feedback << 14);
             // LFSR all-zeros check: if 0, set to 1
@@ -493,7 +493,7 @@ impl Apu {
     }
 
     /// Check if a DMC DMA would fire within `cpu_cycles` CPU cycles
-    /// (used by SHA/SHS/SHY/SHX for IgnoreH behavior - when a DMA occurs
+    /// (used by SHA/SHS/SHY/SHX for `IgnoreH` behavior - when a DMA occurs
     ///  just before the write cycle, the H value is ignored)
     pub fn dmc_dma_imminent(&self, cpu_cycles: u16) -> bool {
         if self.dmc.dma_needed {
@@ -573,9 +573,9 @@ impl Apu {
         }
 
         self.frame_cycles += 1;
-        if self.frame_mode && self.frame_cycles >= 18641 {
-            self.frame_cycles = 0;
-        } else if !self.frame_mode && self.frame_cycles >= 14914 {
+        if (self.frame_mode && self.frame_cycles >= 18641)
+            || (!self.frame_mode && self.frame_cycles >= 14914)
+        {
             self.frame_cycles = 0;
         }
     }
@@ -635,18 +635,26 @@ impl Apu {
         let dmc_out = self.dmc.output() as f32;
         let pulse_sum = pulse1 + pulse2;
         // Non-linear NES DAC formula from NESDev wiki
+        // Each TND channel has a different impedance:
+        //   Triangle: 8227 ohm, Noise: 12241 ohm, DMC: 22638 ohm
         let pulse_part = if pulse_sum == 0.0 {
             0.0
         } else {
             95.88 / (8128.0 / pulse_sum + 100.0)
         };
-        let tnd_sum = triangle_out / 8227.0 + noise_out / 8227.0 + dmc_out / 8227.0;
-        let tnd_part = if tnd_sum == 0.0 {
-            0.0
-        } else {
-            159.79 / (1.0 / tnd_sum + 100.0)
+        let tnd_part = {
+            let tri = triangle_out / 8227.0;
+            let noi = noise_out / 12241.0;
+            let dmc = dmc_out / 22638.0;
+            let tnd_sum = tri + noi + dmc;
+            if tnd_sum == 0.0 {
+                0.0
+            } else {
+                159.79 / (1.0 / tnd_sum + 100.0)
+            }
         };
-        pulse_part + tnd_part
+        // Clamp to valid audio range [-1.0, 1.0]
+        (pulse_part + tnd_part).clamp(0.0, 1.0)
     }
 
     pub fn read(&mut self, addr: u16) -> u8 {
@@ -738,8 +746,13 @@ impl Apu {
             }
             0x4008 => {
                 // Triangle control
-                self.triangle.control_flag = val & 0x80 != 0;
+                // Bit 7 controls both linear counter AND length counter halting
+                let control = val & 0x80 != 0;
+                self.triangle.control_flag = control;
+                self.triangle.length_halt = control;
                 self.triangle.linear_counter_reload = val & 0x7F;
+                // Writing $4008 triggers a linear counter reload
+                self.triangle.linear_reload = true;
             }
             0x400A => {
                 // Triangle timer low

@@ -27,7 +27,12 @@ impl Cnrom {
 impl MapperImpl for Cnrom {
     fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
-            0x8000..=0xFFFF => self.prg[(addr & 0x7FFF) as usize],
+            0x8000..=0xFFFF => {
+                if self.prg.is_empty() {
+                    return 0;
+                }
+                self.prg[(addr & 0x7FFF) as usize % self.prg.len()]
+            }
             _ => 0,
         }
     }
@@ -41,10 +46,13 @@ impl MapperImpl for Cnrom {
     fn ppu_read(&mut self, addr: u16) -> u8 {
         let a = addr & 0x3FFF;
         if a < 0x2000 {
+            if self.chr.is_empty() {
+                return 0;
+            }
             let bank_size = 0x2000;
             let banks = (self.chr.len() / bank_size).max(1);
             let bank = (self.chr_bank as usize) % banks;
-            self.chr[bank * bank_size + a as usize]
+            self.chr[(bank * bank_size + a as usize) % self.chr.len()]
         } else {
             0
         }

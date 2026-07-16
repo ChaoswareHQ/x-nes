@@ -94,7 +94,7 @@ mod addr_modes {
     }
 }
 
-/// Base (minimum) CPU cycles for each opcode, used by tick() to pre-tick APU
+/// Base (minimum) CPU cycles for each opcode, used by `tick()` to pre-tick APU
 /// before instruction execution so DMC DMA timing is detected.
 pub static BASE_CYCLES: [u8; 256] = [
     // 0x00-0x0F

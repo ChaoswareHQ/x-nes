@@ -81,6 +81,8 @@ pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     // Handle DMC DMA if pending (runs between instructions)
     cycles += bus.dmc_tick();
 
+    // Check for interrupts after instruction + DMA complete.
+    // NMI is edge-triggered: sampled at instruction boundaries.
     if bus.poll_nmi() {
         nmi(cpu, bus);
     } else if !cpu.get_flag(FLAG_INTERRUPT) && bus.poll_irq() {

@@ -8,6 +8,7 @@ pub fn slo_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::indx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = val << 1;
     bus.write(addr, shifted);
@@ -22,6 +23,7 @@ pub fn slo_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zp(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = val << 1;
     bus.write(addr, shifted);
@@ -36,6 +38,7 @@ pub fn slo_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::abs(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = val << 1;
     bus.write(addr, shifted);
@@ -50,6 +53,7 @@ pub fn slo_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, page) = addr_modes::indy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = val << 1;
     bus.write(addr, shifted);
@@ -64,6 +68,7 @@ pub fn slo_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zpx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = val << 1;
     bus.write(addr, shifted);
@@ -78,6 +83,7 @@ pub fn slo_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = val << 1;
     bus.write(addr, shifted);
@@ -92,6 +98,7 @@ pub fn slo_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = val << 1;
     bus.write(addr, shifted);
@@ -107,6 +114,7 @@ pub fn rla_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::indx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = (val << 1) | carry;
@@ -122,6 +130,7 @@ pub fn rla_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zp(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = (val << 1) | carry;
@@ -137,6 +146,7 @@ pub fn rla_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::abs(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = (val << 1) | carry;
@@ -152,6 +162,7 @@ pub fn rla_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, page) = addr_modes::indy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = (val << 1) | carry;
@@ -167,6 +178,7 @@ pub fn rla_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zpx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = (val << 1) | carry;
@@ -182,6 +194,7 @@ pub fn rla_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = (val << 1) | carry;
@@ -197,6 +210,7 @@ pub fn rla_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x80 != 0);
     let shifted = (val << 1) | carry;
@@ -213,6 +227,7 @@ pub fn sre_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::indx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let shifted = val >> 1;
     bus.write(addr, shifted);
@@ -227,6 +242,7 @@ pub fn sre_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zp(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let shifted = val >> 1;
     bus.write(addr, shifted);
@@ -241,6 +257,7 @@ pub fn sre_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::abs(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let shifted = val >> 1;
     bus.write(addr, shifted);
@@ -255,6 +272,7 @@ pub fn sre_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, page) = addr_modes::indy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let shifted = val >> 1;
     bus.write(addr, shifted);
@@ -269,6 +287,7 @@ pub fn sre_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zpx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let shifted = val >> 1;
     bus.write(addr, shifted);
@@ -283,6 +302,7 @@ pub fn sre_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let shifted = val >> 1;
     bus.write(addr, shifted);
@@ -297,6 +317,7 @@ pub fn sre_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let shifted = val >> 1;
     bus.write(addr, shifted);
@@ -312,6 +333,7 @@ pub fn rra_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::indx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let rotated = (val >> 1) | (carry << 7);
@@ -324,6 +346,7 @@ pub fn rra_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zp(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let rotated = (val >> 1) | (carry << 7);
@@ -336,6 +359,7 @@ pub fn rra_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::abs(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let rotated = (val >> 1) | (carry << 7);
@@ -348,6 +372,7 @@ pub fn rra_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, page) = addr_modes::indy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let rotated = (val >> 1) | (carry << 7);
@@ -360,6 +385,7 @@ pub fn rra_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zpx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let rotated = (val >> 1) | (carry << 7);
@@ -372,6 +398,7 @@ pub fn rra_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let rotated = (val >> 1) | (carry << 7);
@@ -384,6 +411,7 @@ pub fn rra_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
+    bus.write(addr, val);
     let carry = cpu.get_flag(FLAG_CARRY) as u8;
     cpu.set_flag(FLAG_CARRY, val & 0x01 != 0);
     let rotated = (val >> 1) | (carry << 7);
@@ -492,63 +520,77 @@ pub fn lax_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
 pub fn dcp_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::indx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr).wrapping_sub(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    cmp_inner(cpu, cpu.a(), val);
+    let dec = val.wrapping_sub(1);
+    bus.write(addr, dec);
+    cmp_inner(cpu, cpu.a(), dec);
     8
 }
 
 pub fn dcp_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zp(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr).wrapping_sub(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    cmp_inner(cpu, cpu.a(), val);
+    let dec = val.wrapping_sub(1);
+    bus.write(addr, dec);
+    cmp_inner(cpu, cpu.a(), dec);
     5
 }
 
 pub fn dcp_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::abs(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr).wrapping_sub(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    cmp_inner(cpu, cpu.a(), val);
+    let dec = val.wrapping_sub(1);
+    bus.write(addr, dec);
+    cmp_inner(cpu, cpu.a(), dec);
     6
 }
 
 pub fn dcp_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, page) = addr_modes::indy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr).wrapping_sub(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    cmp_inner(cpu, cpu.a(), val);
+    let dec = val.wrapping_sub(1);
+    bus.write(addr, dec);
+    cmp_inner(cpu, cpu.a(), dec);
     8 + page
 }
 
 pub fn dcp_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zpx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr).wrapping_sub(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    cmp_inner(cpu, cpu.a(), val);
+    let dec = val.wrapping_sub(1);
+    bus.write(addr, dec);
+    cmp_inner(cpu, cpu.a(), dec);
     6
 }
 
 pub fn dcp_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr).wrapping_sub(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    cmp_inner(cpu, cpu.a(), val);
+    let dec = val.wrapping_sub(1);
+    bus.write(addr, dec);
+    cmp_inner(cpu, cpu.a(), dec);
     7
 }
 
 pub fn dcp_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr).wrapping_sub(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    cmp_inner(cpu, cpu.a(), val);
+    let dec = val.wrapping_sub(1);
+    bus.write(addr, dec);
+    cmp_inner(cpu, cpu.a(), dec);
     7
 }
 
@@ -556,63 +598,77 @@ pub fn dcp_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
 pub fn isc_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::indx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr).wrapping_add(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    sbc_inner(cpu, val);
+    let inc = val.wrapping_add(1);
+    bus.write(addr, inc);
+    sbc_inner(cpu, inc);
     8
 }
 
 pub fn isc_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zp(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr).wrapping_add(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    sbc_inner(cpu, val);
+    let inc = val.wrapping_add(1);
+    bus.write(addr, inc);
+    sbc_inner(cpu, inc);
     5
 }
 
 pub fn isc_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::abs(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr).wrapping_add(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    sbc_inner(cpu, val);
+    let inc = val.wrapping_add(1);
+    bus.write(addr, inc);
+    sbc_inner(cpu, inc);
     6
 }
 
 pub fn isc_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, page) = addr_modes::indy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr).wrapping_add(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    sbc_inner(cpu, val);
+    let inc = val.wrapping_add(1);
+    bus.write(addr, inc);
+    sbc_inner(cpu, inc);
     8 + page
 }
 
 pub fn isc_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let addr = addr_modes::zpx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr).wrapping_add(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    sbc_inner(cpu, val);
+    let inc = val.wrapping_add(1);
+    bus.write(addr, inc);
+    sbc_inner(cpu, inc);
     6
 }
 
 pub fn isc_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absy(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr).wrapping_add(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    sbc_inner(cpu, val);
+    let inc = val.wrapping_add(1);
+    bus.write(addr, inc);
+    sbc_inner(cpu, inc);
     7
 }
 
 pub fn isc_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let (addr, _) = addr_modes::absx(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr).wrapping_add(1);
+    let val = bus.read(addr);
     bus.write(addr, val);
-    sbc_inner(cpu, val);
+    let inc = val.wrapping_add(1);
+    bus.write(addr, inc);
+    sbc_inner(cpu, inc);
     7
 }
 

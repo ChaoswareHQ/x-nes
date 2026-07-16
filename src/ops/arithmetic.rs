@@ -2,7 +2,7 @@ use crate::bus::Bus;
 use crate::cpu::{CpuRp2a03, FLAG_CARRY, FLAG_OVERFLOW};
 use crate::ops::addr_modes;
 
-pub(crate) fn adc_inner(cpu: &mut CpuRp2a03, operand: u8) {
+pub fn adc_inner(cpu: &mut CpuRp2a03, operand: u8) {
     let a = cpu.a();
     let carry = cpu.get_flag(FLAG_CARRY) as u16;
     let result = a as u16 + operand as u16 + carry;
@@ -75,7 +75,7 @@ pub fn adc_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     5 + page
 }
 
-pub(crate) fn sbc_inner(cpu: &mut CpuRp2a03, operand: u8) {
+pub fn sbc_inner(cpu: &mut CpuRp2a03, operand: u8) {
     let a = cpu.a();
     let carry = cpu.get_flag(FLAG_CARRY) as u16;
     let result = (a as u16)
@@ -149,7 +149,7 @@ pub fn sbc_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     5 + page
 }
 
-pub(crate) fn cmp_inner(cpu: &mut CpuRp2a03, reg: u8, mem: u8) {
+pub fn cmp_inner(cpu: &mut CpuRp2a03, reg: u8, mem: u8) {
     let diff = reg.wrapping_sub(mem);
     cpu.set_flag(FLAG_CARRY, reg >= mem);
     cpu.set_sign(diff);

@@ -11,7 +11,7 @@ pub struct Bus {
     pub pad1: Gamepad,
     pub pad2: Gamepad,
     /// Tracks last value on the data bus for open bus reads
-    open_bus: u8,
+    open_bus_val: u8,
     /// Set to true when DMC DMA fires between instructions
     /// Used by SHA/SHS/SHY/SHX to know if H should be ignored
     pub dmc_just_fired: bool,
@@ -26,7 +26,7 @@ impl Bus {
             apu: Apu::new(),
             pad1: Gamepad::new(),
             pad2: Gamepad::new(),
-            open_bus: 0,
+            open_bus_val: 0,
             dmc_just_fired: false,
         }
     }
@@ -39,25 +39,25 @@ impl Bus {
             2 | 3 => self.read_ppu(addr),
             4 if addr < 0x4018 => match addr {
                 // $4015 returns APU status, but bit 5 is open bus (from data bus)
-                0x4015 => self.apu.read(addr) | (self.open_bus & 0x20),
-                0x4016 => (self.pad1.read() & 0x01) | (self.open_bus & 0xE0),
+                0x4015 => self.apu.read(addr) | (self.open_bus_val & 0x20),
+                0x4016 => (self.pad1.read() & 0x01) | (self.open_bus_val & 0xFE),
                 // $4017 reads Famicom controller 2 (also NES expansion port)
-                // Bit 0 = controller 2 data, bits 5-7 = open bus
-                0x4017 => (self.pad2.read() & 0x01) | (self.open_bus & 0xE0),
+                // Bit 0 = controller 2 data, bits 1-7 = open bus
+                0x4017 => (self.pad2.read() & 0x01) | (self.open_bus_val & 0xFE),
                 // $4000-$4014 ($4015 handled above) are write-only APU registers
                 // Reading write-only APU registers returns open bus
-                _ => self.open_bus,
+                _ => self.open_bus_val,
             },
             4 if addr < 0x4020 => {
                 // $4018-$401F: open bus, mirrors of APU registers
-                self.open_bus
+                self.open_bus_val
             }
             _ => {
                 if addr >= 0x6000 {
                     self.mapper.cpu_read(addr)
                 } else if addr >= 0x4000 {
                     // $4020-$5FFF: open bus range
-                    self.open_bus
+                    self.open_bus_val
                 } else {
                     0
                 }
@@ -92,7 +92,7 @@ impl Bus {
             _ => true,
         };
         if !is_open_bus {
-            self.open_bus = val;
+            self.open_bus_val = val;
         }
         val
     }
@@ -124,7 +124,7 @@ impl Bus {
         // NOTE: top = addr >> 12, so $0100-$01FF gives top=0 (not 1!).
         // Check the actual page using (addr & 0xFF00) != 0x0100.
         if (addr & 0xFF00) != 0x0100 {
-            self.open_bus = val;
+            self.open_bus_val = val;
         }
     }
 
@@ -162,6 +162,7 @@ impl Bus {
             let val = self.read(addr);
             self.ppu.oam[self.ppu.oam_addr as usize] = val;
             self.ppu.oam_addr = self.ppu.oam_addr.wrapping_add(1);
+            // OAM DMA timing handled externally by tick() advancing PPU
         }
     }
 
@@ -197,7 +198,7 @@ impl Bus {
             let val = self.mapper.cpu_read(addr);
             self.apu.dmc_complete_dma(val);
             // DMC DMA reads a byte from memory like a CPU read
-            self.open_bus = val;
+            self.open_bus_val = val;
             // Flag that a DMA just fired (for SHA/SHS/SHY/SHX IgnoreH)
             self.dmc_just_fired = true;
             // DMC DMA steals 4 CPU cycles (affects PPU timing)

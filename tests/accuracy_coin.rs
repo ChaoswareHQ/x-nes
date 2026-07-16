@@ -55,16 +55,6 @@ impl AccuracyCoinRunner {
         }
     }
 
-    fn run_cycles(&mut self, cycles: u64) {
-        let target = self.total_cycles + cycles;
-        while self.total_cycles < target {
-            self.tick();
-            if self.total_cycles > 200_000_000 {
-                break;
-            }
-        }
-    }
-
     fn press_start(&mut self) {
         self.bus.pad1.start = true;
     }

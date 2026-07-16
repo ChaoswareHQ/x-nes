@@ -176,15 +176,16 @@ impl MapperImpl for Mmc3 {
                     self.irq_latch = val;
                 } else {
                     // $C001: IRQ reload (counter set to 0, triggers reload on next A12 edge)
+                    // Also acknowledges any pending IRQ (real MMC3 behavior)
                     self.irq_counter = 0;
+                    self.irq_flag = false;
                     self.irq_reload = true;
                 }
             }
             0xE000..=0xFFFF => {
                 if addr & 1 == 0 {
-                    // $E000: IRQ acknowledge
+                    // $E000: IRQ acknowledge (clears flag, does NOT disable)
                     self.irq_flag = false;
-                    self.irq_enabled = false;
                 } else {
                     // $E001: IRQ enable
                     self.irq_enabled = true;
@@ -248,7 +249,7 @@ impl MapperImpl for Mmc3 {
                 } else {
                     self.chr_banks[1] as usize & 0xFE
                 };
-                let sub = if (a & 0x400) != 0 { 1 } else { 0 };
+                let sub = usize::from((a & 0x400) != 0);
                 ((b | sub) * 0x400, 0x400)
             }
         } else {
@@ -260,7 +261,7 @@ impl MapperImpl for Mmc3 {
                 } else {
                     self.chr_banks[1] as usize & 0xFE
                 };
-                let sub = if (a & 0x400) != 0 { 1 } else { 0 };
+                let sub = usize::from((a & 0x400) != 0);
                 ((b | sub) * 0x400, 0x400)
             } else {
                 let idx = match (a >> 10) & 3 {

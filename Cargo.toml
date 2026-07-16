@@ -10,10 +10,10 @@ documentation = "https://chaoswarehq.github.io/x-nes/"
 license = "MIT OR Apache-2.0"
 description = "A minimal NES emulator library written in Rust, targeting everything from microcontrollers to modern desktops."
 readme = "README.md"
-keywords = ["nes", "emulator", "no_std", "ffi", "embedded"]
+keywords = ["nes", "emulator", "no-std", "ffi", "embedded"]
 categories = ["emulation", "embedded", "game-development", "api-bindings", "multimedia"]
 
-exclude = [".github/"]
+exclude = [".github/", "fpga"]
 
 [features]
 default = ["std"]
