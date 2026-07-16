@@ -126,6 +126,162 @@ impl Pulse {
 }
 
 #[derive(Default, Clone)]
+pub struct Triangle {
+    pub enabled: bool,
+    pub linear_counter_reload: u8, // bits 6-0 of $4008
+    pub control_flag: bool,        // bit 7 of $4008 (halt / linear counter flag)
+    pub linear_counter: u8,
+    pub length_counter: u8,
+    pub length_halt: bool,
+    pub timer_load: u16,
+    pub timer_val: u16,
+    pub sequencer: u8, // 0..31, generates triangle waveform
+    pub linear_reload: bool,
+}
+
+impl Triangle {
+    fn clock_length(&mut self) {
+        if self.length_counter > 0 && !self.length_halt {
+            self.length_counter -= 1;
+        }
+    }
+
+    fn clock_linear_counter(&mut self) {
+        if self.linear_reload {
+            self.linear_counter = self.linear_counter_reload;
+        } else if self.linear_counter > 0 {
+            self.linear_counter -= 1;
+        }
+        if !self.control_flag {
+            self.linear_reload = false;
+        }
+    }
+
+    fn step_timer(&mut self) {
+        if self.timer_val == 0 {
+            self.timer_val = self.timer_load;
+            self.sequencer = self.sequencer.wrapping_add(1) & 31;
+        } else {
+            self.timer_val -= 1;
+        }
+    }
+
+    fn output(&self) -> u8 {
+        if !self.enabled || self.length_counter == 0 || self.linear_counter == 0 {
+            return 0;
+        }
+        // Triangle sequencer: counts up 0..15 then down 15..0
+        // Output is 4-bit (0-15) for the DAC mixer formula
+        if self.sequencer < 16 {
+            self.sequencer
+        } else {
+            31 - self.sequencer
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Noise {
+    pub enabled: bool,
+    pub vol: u8,
+    pub env_disable: bool,
+    pub env_start: bool,
+    pub env_divider: u8,
+    pub env_decay: u8,
+    pub length_counter: u8,
+    pub length_halt: bool,
+    pub mode: bool,       // bit 7 of $400E
+    pub period_index: u8, // bits 3-0 of $400E
+    pub timer_load: u16,
+    pub timer_val: u16,
+    pub lfsr: u16, // 15-bit shift register
+}
+
+impl Default for Noise {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            vol: 0,
+            env_disable: false,
+            env_start: false,
+            env_divider: 0,
+            env_decay: 0,
+            length_counter: 0,
+            length_halt: false,
+            mode: false,
+            period_index: 0,
+            timer_load: 0,
+            timer_val: 0,
+            lfsr: 1, // LFSR starts at 1
+        }
+    }
+}
+
+// Noise period table (CPU cycles)
+const NOISE_PERIODS: [u16; 16] = [
+    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
+];
+
+impl Noise {
+    fn clock_length(&mut self) {
+        if self.length_counter > 0 && !self.length_halt {
+            self.length_counter -= 1;
+        }
+    }
+
+    fn clock_envelope(&mut self) {
+        if self.env_start {
+            self.env_start = false;
+            self.env_decay = 15;
+            self.env_divider = self.vol;
+        } else if self.env_divider == 0 {
+            self.env_divider = self.vol;
+            if self.env_decay == 0 {
+                if self.length_halt {
+                    self.env_decay = 15;
+                }
+            } else {
+                self.env_decay -= 1;
+            }
+        } else {
+            self.env_divider -= 1;
+        }
+    }
+
+    fn step_timer(&mut self) {
+        if self.timer_val == 0 {
+            self.timer_val = self.timer_load;
+            // Clock LFSR
+            let feedback = if self.mode {
+                // Mode 1: feedback from bits 0 and 6
+                ((self.lfsr >> 0) ^ (self.lfsr >> 6)) & 1
+            } else {
+                // Mode 0: feedback from bits 0 and 1
+                ((self.lfsr >> 0) ^ (self.lfsr >> 1)) & 1
+            };
+            self.lfsr = (self.lfsr >> 1) | (feedback << 14);
+            // LFSR all-zeros check: if 0, set to 1
+            if self.lfsr == 0 {
+                self.lfsr = 1;
+            }
+        } else {
+            self.timer_val -= 1;
+        }
+    }
+
+    fn output(&self) -> u8 {
+        if !self.enabled || self.length_counter == 0 || (self.lfsr & 1) != 0 {
+            return 0;
+        }
+        if self.env_disable {
+            self.vol
+        } else {
+            self.env_decay
+        }
+    }
+}
+
+#[derive(Default, Clone)]
 pub struct Dmc {
     // Registers
     pub rate_index: u8,        // bits 3-0 of $4010
@@ -161,6 +317,14 @@ impl Dmc {
         self.bytes_remaining = self.sample_len;
         self.buffer_empty = true;
         self.bits_remaining = 0;
+        self.dma_needed = false;
+        // Reset timer so DMA fires after timer_load CPU cycles
+        // (real NES also has a 2-3 CPU cycle startup delay)
+        self.timer = if self.timer_load == 0 {
+            1
+        } else {
+            self.timer_load
+        };
     }
 
     fn step(&mut self) -> bool {
@@ -265,6 +429,8 @@ pub struct Apu {
     pub cycles: u64,
     pub p1: Pulse,
     pub p2: Pulse,
+    triangle: Triangle,
+    noise: Noise,
     dmc: Dmc,
     pub audio_samples: [f32; 4096],
     pub sample_count: usize,
@@ -295,6 +461,8 @@ impl Apu {
             cycles: 0,
             p1: Pulse::default(),
             p2: Pulse::default(),
+            triangle: Triangle::default(),
+            noise: Noise::default(),
             dmc: Dmc {
                 buffer_empty: true,
                 timer: 1,
@@ -359,6 +527,7 @@ impl Apu {
     fn clock_quarter_frame(&mut self) {
         self.p1.clock_envelope();
         self.p2.clock_envelope();
+        self.noise.clock_envelope();
     }
 
     fn clock_half_frame(&mut self) {
@@ -366,42 +535,48 @@ impl Apu {
         self.p2.clock_length();
         self.p1.clock_sweep();
         self.p2.clock_sweep();
+        self.triangle.clock_length();
+        self.noise.clock_length();
+        self.triangle.clock_linear_counter();
     }
 
     fn clock_frame_counter(&mut self) {
-        self.frame_cycles += 1;
+        // Events happen at the END of each APU cycle.
+        // Check at current frame_cycles (pre-increment), then increment.
 
         if self.frame_mode {
             // Mode 1: 5-step sequence (18641 APU cycles)
+            // Events at end of cycles: 3728, 7456, 11185, 18640
             match self.frame_cycles {
-                3729 | 7457 | 11186 | 18641 => self.clock_quarter_frame(),
+                3728 | 7456 | 11185 | 18640 => self.clock_quarter_frame(),
                 _ => {}
             }
             match self.frame_cycles {
-                7457 | 18641 => self.clock_half_frame(),
+                7456 | 18640 => self.clock_half_frame(),
                 _ => {}
-            }
-            if self.frame_cycles >= 18641 {
-                self.frame_cycles = 0;
             }
         } else {
-            // Mode 0: 4-step sequence (14915 APU cycles)
-            // Events happen at: step end APU cycles 3729, 7457, 11186, 14914
+            // Mode 0: 4-step sequence (14914 APU cycles)
+            // Events at end of cycles: 3728, 7456, 11185, 14913
             match self.frame_cycles {
-                3729 | 7457 | 11186 | 14914 => self.clock_quarter_frame(),
+                3728 | 7456 | 11185 | 14913 => self.clock_quarter_frame(),
                 _ => {}
             }
             match self.frame_cycles {
-                7457 | 14914 => self.clock_half_frame(),
+                7456 | 14913 => self.clock_half_frame(),
                 _ => {}
             }
-            // IRQ fires at APU cycle 14914 of the frame
-            if self.frame_cycles == 14914 && !self.interrupt_inhibit {
+            // IRQ fires at end of APU cycle 14913
+            if self.frame_cycles == 14913 && !self.interrupt_inhibit {
                 self.frame_irq = true;
             }
-            if self.frame_cycles >= 14914 {
-                self.frame_cycles = 0;
-            }
+        }
+
+        self.frame_cycles += 1;
+        if self.frame_mode && self.frame_cycles >= 18641 {
+            self.frame_cycles = 0;
+        } else if !self.frame_mode && self.frame_cycles >= 14914 {
+            self.frame_cycles = 0;
         }
     }
 
@@ -435,6 +610,8 @@ impl Apu {
             if self.cycles & 1 == 1 {
                 self.p1.step_timer();
                 self.p2.step_timer();
+                self.triangle.step_timer();
+                self.noise.step_timer();
                 self.clock_frame_counter();
             }
 
@@ -453,6 +630,8 @@ impl Apu {
     fn mixer_output(&self) -> f32 {
         let pulse1 = self.p1.volume_output() as f32;
         let pulse2 = self.p2.volume_output() as f32;
+        let triangle_out = self.triangle.output() as f32;
+        let noise_out = self.noise.output() as f32;
         let dmc_out = self.dmc.output() as f32;
         let pulse_sum = pulse1 + pulse2;
         // Non-linear NES DAC formula from NESDev wiki
@@ -461,12 +640,13 @@ impl Apu {
         } else {
             95.88 / (8128.0 / pulse_sum + 100.0)
         };
-        let dmc_part = if dmc_out == 0.0 {
+        let tnd_sum = triangle_out / 8227.0 + noise_out / 8227.0 + dmc_out / 8227.0;
+        let tnd_part = if tnd_sum == 0.0 {
             0.0
         } else {
-            159.79 / (1.0 / (dmc_out / 8227.0) + 100.0)
+            159.79 / (1.0 / tnd_sum + 100.0)
         };
-        pulse_part + dmc_part
+        pulse_part + tnd_part
     }
 
     pub fn read(&mut self, addr: u16) -> u8 {
@@ -478,6 +658,12 @@ impl Apu {
                 }
                 if self.p2.length_counter > 0 {
                     status |= 2;
+                }
+                if self.triangle.length_counter > 0 {
+                    status |= 4;
+                }
+                if self.noise.length_counter > 0 {
+                    status |= 8;
                 }
                 if self.dmc.enabled && self.dmc.bytes_remaining > 0 {
                     status |= 0x10;
@@ -550,6 +736,45 @@ impl Apu {
                     self.p2.length_counter = LENGTH_TABLE[idx.min(31)];
                 }
             }
+            0x4008 => {
+                // Triangle control
+                self.triangle.control_flag = val & 0x80 != 0;
+                self.triangle.linear_counter_reload = val & 0x7F;
+            }
+            0x400A => {
+                // Triangle timer low
+                self.triangle.timer_load = (self.triangle.timer_load & 0xFF00) | val as u16;
+            }
+            0x400B => {
+                // Triangle timer high + length counter
+                self.triangle.timer_load =
+                    (self.triangle.timer_load & 0x00FF) | ((val as u16 & 7) << 8);
+                self.triangle.linear_reload = true;
+                if self.triangle.enabled {
+                    let idx = (val >> 3) as usize;
+                    self.triangle.length_counter = LENGTH_TABLE[idx.min(31)];
+                }
+            }
+            0x400C => {
+                // Noise volume/envelope
+                self.noise.length_halt = val & 0x20 != 0;
+                self.noise.env_disable = val & 0x10 != 0;
+                self.noise.vol = val & 0x0F;
+            }
+            0x400E => {
+                // Noise mode/period
+                self.noise.mode = val & 0x80 != 0;
+                self.noise.period_index = val & 0x0F;
+                self.noise.timer_load = NOISE_PERIODS[self.noise.period_index as usize];
+            }
+            0x400F => {
+                // Noise length counter
+                self.noise.env_start = true;
+                if self.noise.enabled {
+                    let idx = (val >> 3) as usize;
+                    self.noise.length_counter = LENGTH_TABLE[idx.min(31)];
+                }
+            }
             0x4010 => {
                 // DMC control
                 self.dmc.irq_enable = val & 0x80 != 0;
@@ -576,11 +801,19 @@ impl Apu {
             0x4015 => {
                 self.p1.enabled = val & 1 != 0;
                 self.p2.enabled = val & 2 != 0;
+                self.triangle.enabled = val & 4 != 0;
+                self.noise.enabled = val & 8 != 0;
                 if !self.p1.enabled {
                     self.p1.length_counter = 0;
                 }
                 if !self.p2.enabled {
                     self.p2.length_counter = 0;
+                }
+                if !self.triangle.enabled {
+                    self.triangle.length_counter = 0;
+                }
+                if !self.noise.enabled {
+                    self.noise.length_counter = 0;
                 }
                 // DMC enable (bit 4)
                 let prev_enabled = self.dmc.enabled;

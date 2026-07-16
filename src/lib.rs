@@ -52,15 +52,31 @@ pub mod rom;
 
 use bus::Bus;
 use cpu::{CpuRp2a03, FLAG_BREAK, FLAG_INTERRUPT};
-use ops::TABLE;
+use ops::{BASE_CYCLES, TABLE};
 
 pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let opcode = bus.read(cpu.pc());
     cpu.set_pc(cpu.pc().wrapping_add(1));
+
+    // Pre-tick APU by base cycles BEFORE instruction execution,
+    // so DMC timer expiry is detected and dmc_just_fired is set
+    // before the instruction's write cycle.
+    let base = BASE_CYCLES[opcode as usize];
+    bus.apu.tick(base as u16);
+    if bus.apu.dmc_dma_pending() {
+        bus.dmc_just_fired = true;
+    }
+
+    // Now execute the instruction (it sees dmc_just_fired if DMA is pending)
     let mut cycles = TABLE[opcode as usize](cpu, bus);
 
+    // Tick PPU for actual instruction cycles
     bus.ppu_tick((cycles as u16) * 3);
-    bus.apu.tick(cycles as u16);
+
+    // Tick remaining APU cycles (those beyond base cycles, e.g. page cross)
+    if (cycles as u16) > base as u16 {
+        bus.apu.tick((cycles as u16) - base as u16);
+    }
 
     // Handle DMC DMA if pending (runs between instructions)
     cycles += bus.dmc_tick();

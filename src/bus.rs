@@ -9,6 +9,7 @@ pub struct Bus {
     pub ppu: Ppu,
     pub apu: Apu,
     pub pad1: Gamepad,
+    pub pad2: Gamepad,
     /// Tracks last value on the data bus for open bus reads
     open_bus: u8,
     /// Set to true when DMC DMA fires between instructions
@@ -24,6 +25,7 @@ impl Bus {
             ppu: Ppu::new(),
             apu: Apu::new(),
             pad1: Gamepad::new(),
+            pad2: Gamepad::new(),
             open_bus: 0,
             dmc_just_fired: false,
         }
@@ -38,10 +40,10 @@ impl Bus {
             4 if addr < 0x4018 => match addr {
                 // $4015 returns APU status, but bit 5 is open bus (from data bus)
                 0x4015 => self.apu.read(addr) | (self.open_bus & 0x20),
-                0x4016 => (self.pad1.read() & 0x1F) | (self.open_bus & 0xE0) | 0x40,
-                // $4017 reads controller 2 - no pad2 yet, return 0 for bits 0-4
-                // Upper 3 bits are open bus from data bus
-                0x4017 => (self.open_bus & 0xE0) | 0x40,
+                0x4016 => (self.pad1.read() & 0x01) | (self.open_bus & 0xE0),
+                // $4017 reads Famicom controller 2 (also NES expansion port)
+                // Bit 0 = controller 2 data, bits 5-7 = open bus
+                0x4017 => (self.pad2.read() & 0x01) | (self.open_bus & 0xE0),
                 // $4000-$4014 ($4015 handled above) are write-only APU registers
                 // Reading write-only APU registers returns open bus
                 _ => self.open_bus,
@@ -105,6 +107,7 @@ impl Bus {
                 0x4014 => self.oam_dma(val),
                 0x4016 => {
                     self.pad1.write(val);
+                    self.pad2.write(val); // Strobe affects both controllers
                     self.apu.write(addr, val);
                 }
                 _ => self.apu.write(addr, val),

@@ -23,7 +23,6 @@ pub struct Ppu {
     pub data_buffer: u8,
     /// Last value written to any PPU register (for open bus reads)
     pub last_bus_value: u8,
-
     pub scanline: u16,
     pub cycle: u16,
     pub nmi_pending: bool,
@@ -201,6 +200,7 @@ impl Ppu {
         (bg_color, 0)
     }
 
+    #[allow(dead_code)]
     pub fn tick(&mut self, mapper: &mut Mapper) {
         let sl = self.scanline;
         let cy = self.cycle;
@@ -247,6 +247,9 @@ impl Ppu {
         if nc > 340 {
             self.cycle = 0;
             let ns = sl.wrapping_add(1);
+            // Clock mapper scanline counter at start of each new scanline
+            // (MMC3 uses this for IRQ-triggered split scrolling)
+            mapper.clock_scanline();
             if ns > 261 {
                 self.scanline = 0;
                 self.odd_frame = !self.odd_frame;
@@ -375,8 +378,13 @@ impl Ppu {
             self.ppu_read_nt(addr, mapper.mirroring())
         };
         let result = if addr < 0x3F00 { self.data_buffer } else { val };
-        if addr & 0x3F00 != 0x3F00 {
+        // Data buffer is always updated after read, even for palette reads.
+        // For palette reads, the buffer gets the nametable value at addr & 0x2FFF.
+        if addr < 0x3F00 {
             self.data_buffer = val;
+        } else {
+            // Palette RAM reads update the buffer from the nametable mirror
+            self.data_buffer = self.ppu_read_nt(addr & 0x2FFF, mapper.mirroring());
         }
         self.v = self
             .v

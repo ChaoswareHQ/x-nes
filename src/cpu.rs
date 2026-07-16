@@ -1,10 +1,10 @@
-pub const FLAG_CARRY: u8     = 0b0000_0001;
-pub const FLAG_ZERO: u8      = 0b0000_0010;
+pub const FLAG_CARRY: u8 = 0b0000_0001;
+pub const FLAG_ZERO: u8 = 0b0000_0010;
 pub const FLAG_INTERRUPT: u8 = 0b0000_0100;
-pub const FLAG_DECIMAL: u8   = 0b0000_1000;
-pub const FLAG_BREAK: u8     = 0b0001_0000;
-pub const FLAG_OVERFLOW: u8  = 0b0100_0000;
-pub const FLAG_NEGATIVE: u8  = 0b1000_0000;
+pub const FLAG_DECIMAL: u8 = 0b0000_1000;
+pub const FLAG_BREAK: u8 = 0b0001_0000;
+pub const FLAG_OVERFLOW: u8 = 0b0100_0000;
+pub const FLAG_NEGATIVE: u8 = 0b1000_0000;
 
 /// RP2A03 CPU register file.
 ///
@@ -51,34 +51,54 @@ impl CpuRp2a03 {
     }
 
     #[inline(always)]
-    pub fn a(&self) -> u8 { self.a }
+    pub fn a(&self) -> u8 {
+        self.a
+    }
 
     #[inline(always)]
-    pub fn set_a(&mut self, val: u8) { self.a = val; }
+    pub fn set_a(&mut self, val: u8) {
+        self.a = val;
+    }
 
     #[inline(always)]
-    pub fn x(&self) -> u8 { self.x }
+    pub fn x(&self) -> u8 {
+        self.x
+    }
 
     #[inline(always)]
-    pub fn set_x(&mut self, val: u8) { self.x = val; }
+    pub fn set_x(&mut self, val: u8) {
+        self.x = val;
+    }
 
     #[inline(always)]
-    pub fn y(&self) -> u8 { self.y }
+    pub fn y(&self) -> u8 {
+        self.y
+    }
 
     #[inline(always)]
-    pub fn set_y(&mut self, val: u8) { self.y = val; }
+    pub fn set_y(&mut self, val: u8) {
+        self.y = val;
+    }
 
     #[inline(always)]
-    pub fn st(&self) -> u8 { self.st }
+    pub fn st(&self) -> u8 {
+        self.st
+    }
 
     #[inline(always)]
-    pub fn set_st(&mut self, val: u8) { self.st = val; }
+    pub fn set_st(&mut self, val: u8) {
+        self.st = val;
+    }
 
     #[inline(always)]
-    pub fn sr(&self) -> u8 { self.sr }
+    pub fn sr(&self) -> u8 {
+        self.sr
+    }
 
     #[inline(always)]
-    pub fn set_sr(&mut self, val: u8) { self.sr = val; }
+    pub fn set_sr(&mut self, val: u8) {
+        self.sr = val;
+    }
 
     #[inline(always)]
     pub fn get_flag(&self, flag: u8) -> bool {
