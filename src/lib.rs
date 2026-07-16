@@ -55,6 +55,17 @@ use cpu::{CpuRp2a03, FLAG_BREAK, FLAG_INTERRUPT};
 use ops::{BASE_CYCLES, TABLE};
 
 pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
+    // Promote deferred NMI at instruction boundary.
+    // On real NES, enabling NMI ($2000 write) during VBlank fires NMI
+    // after the NEXT instruction, not immediately.
+    // The write_ctrl sets nmi_deferred during instruction N;
+    // we promote it here at the start of instruction N+1 so that
+    // NMI fires at the end of instruction N+1.
+    if bus.ppu.nmi_deferred {
+        bus.ppu.nmi_pending = true;
+        bus.ppu.nmi_deferred = false;
+    }
+
     let opcode = bus.read(cpu.pc());
     cpu.set_pc(cpu.pc().wrapping_add(1));
 

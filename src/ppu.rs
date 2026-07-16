@@ -25,6 +25,9 @@ pub struct Ppu {
     pub scanline: u16,
     pub cycle: u16,
     pub nmi_pending: bool,
+    // Deferred NMI: set when $2000 write enables NMI during VBlank.
+    // On real NES, NMI fires after the NEXT instruction, not immediately.
+    pub nmi_deferred: bool,
     pub frame_complete: bool,
     pub frame: [u8; 61440],
     odd_frame: bool,
@@ -42,6 +45,11 @@ pub struct Ppu {
 
     // VBL suppression
     vbl_suppressed: bool,
+
+    // Snapshot of v register at start of scanline (for stable scroll)
+    render_v: u16,
+    // Snapshot of fine_x at sync points (cycle 0 of prerender, cycle 257)
+    render_fine_x: u8,
 }
 
 impl Ppu {
@@ -63,6 +71,7 @@ impl Ppu {
             scanline: 0,
             cycle: 0,
             nmi_pending: false,
+            nmi_deferred: false,
             frame_complete: false,
             frame: [0; 61440],
             odd_frame: true,
@@ -74,6 +83,8 @@ impl Ppu {
             bg_attr_shift_low: 0,
             bg_attr_shift_high: 0,
             vbl_suppressed: false,
+            render_v: 0,
+            render_fine_x: 0,
         }
     }
 
@@ -87,12 +98,19 @@ impl Ppu {
 
     // ---- On-the-fly background pixel computation ----
     fn compute_bg_pixel(&self, x: u16, y: u16, mapper: &mut Mapper) -> (u8, u8) {
-        let coarse_x = self.t & 0x001F;
-        let coarse_y = (self.t >> 5) & 0x001F;
-        let fine_y = (self.t >> 12) & 0x0007;
-        let nt = (self.t >> 10) & 0x0003;
+        // Use render_v (snapshot of v at last sync point) instead of t.
+        // During visible rendering, $2005 writes modify t but the real PPU
+        // defers scroll changes to sync points:
+        //   - Cycle 257: copy_horizontal (t → v coarse_x/fine_x)
+        //   - Cycle 0 of prerender: copy_vertical (t → v coarse_y/fine_y)
+        // Using render_v ensures scroll updates take effect at the correct
+        // scanline boundary, fixing Castlevania II scroll corruption.
+        let coarse_x = self.render_v & 0x001F;
+        let coarse_y = (self.render_v >> 5) & 0x001F;
+        let fine_y = (self.render_v >> 12) & 0x0007;
+        let nt = (self.render_v >> 10) & 0x0003;
 
-        let world_x = (coarse_x << 3) + self.fine_x as u16 + x;
+        let world_x = (coarse_x << 3) + self.render_fine_x as u16 + x;
         let world_y = (coarse_y << 3) + fine_y + y;
 
         let mirroring = mapper.mirroring();
@@ -258,14 +276,19 @@ impl Ppu {
         }
     }
     fn increment_coarse_y(&mut self) {
+        // Real NES increment_coarse_y: first handle fine_y, then coarse_y.
+        // But the order doesn't matter for the same-tick result.
         let y = self.v & 0x03E0;
         self.v = if y == 0x03C0 {
+            // coarse_y = 30: wrap to 0, toggle vertical NT (bit 11)
             (self.v & !0x03E0) ^ 0x0800
-        } else if y == 0x03A0 {
-            (self.v & !0x03E0) | 0x03C0
+        } else if y == 0x03E0 {
+            // coarse_y = 31: wrap to 0, toggle horizontal NT (bit 10)
+            (self.v & !0x03E0) ^ 0x0400
         } else {
             self.v + 0x0020
         };
+        // Handle fine_y (bits 12-14)
         if (self.v >> 12) & 7 == 7 {
             self.v &= !0x7000;
         } else {
@@ -329,6 +352,13 @@ impl Ppu {
         let cy = self.cycle;
 
         // ===== Cycle advance / scanline management =====
+        // On odd frames with rendering enabled, the prerender scanline (261)
+        // has 340 cycles instead of 341. Cycle 340 is skipped.
+        // The skip is checked AFTER processing cycle 339 (when cy == 339
+        // and we're about to increment to cy == 340 for the next tick).
+        // We achieve this by checking cy == 339 at the START of the tick:
+        // on skip, process cycle 339, then advance (skipping the cy=340 tick).
+        // On normal, just process and let the next tick (cy=340) handle advance.
         if cy > 339 {
             self.cycle = 0;
             let ns = sl.wrapping_add(1);
@@ -339,22 +369,47 @@ impl Ppu {
             } else {
                 self.scanline = ns;
             }
-            // Cycle 0 of scanline 261 (prerender): vertical scroll copy only
+            // Cycle 0 of scanline 261 (prerender): vertical scroll copy, clear flags
             if self.scanline == PRERENDER_SCANLINE {
                 self.sprite_zero_hit_possible = true;
                 if self.rendering_enabled() {
                     self.copy_vertical();
                 }
+                // Snapshot initial scroll after copy_vertical at the prerender.
+                self.render_v = self.v;
+                // Also snapshot fine_x (from VBlank $2005 writes).
+                // This ensures fine_x and coarse_x are in sync.
+                self.render_fine_x = self.fine_x;
             }
             return;
         }
         self.cycle += 1;
+
+        // Odd frame skip: after processing cycle 339 (now cy=340),
+        // and we're on prerender + odd frame + rendering, skip forward.
+        if self.scanline == PRERENDER_SCANLINE
+            && self.cycle == 340
+            && self.odd_frame
+            && (self.mask & 0x18) != 0
+        {
+            // Skip cycle 340 entirely - go directly to scanline 0
+            // render_v is NOT updated here - it retains the initial scroll
+            // from cycle 0 of prerender + horizontal bits from cycle 257.
+            self.cycle = 0;
+            self.scanline = 0;
+            self.odd_frame = !self.odd_frame;
+            self.frame_complete = true;
+            self.sprite_zero_hit_possible = true;
+            return;
+        }
 
         // ===== Cycle 1: VBlank set / prerender VBL clear =====
         if cy == 1 && sl == VBLANK_START {
             if !self.vbl_suppressed {
                 self.status = (self.status | 0x80) & !0x20;
                 if self.ctrl & 0x80 != 0 {
+                    // NMI fires at end of current instruction if VBlank starts naturally.
+                    // This is distinct from the deferred NMI from $2000 writes.
                     self.nmi_pending = true;
                 }
             }
@@ -383,6 +438,9 @@ impl Ppu {
                     self.render_pixel(cy - 1, sl, mapper);
                 }
                 // At cycle 256: increment vertical scroll
+                // NOTE: render_v is NOT updated here - it keeps the initial scroll
+                // from cycle 0 of prerender. The scanline progression (y) in
+                // compute_bg_pixel handles fine_y/coarse_y advancement.
                 if cy == 256 && self.rendering_enabled() {
                     self.increment_coarse_y();
                 }
@@ -392,6 +450,13 @@ impl Ppu {
             if cy == 257 {
                 if self.rendering_enabled() {
                     self.copy_horizontal();
+                    // Copy ONLY horizontal bits from v to render_v (coarse_x + NT select)
+                    // This reflects $2005 writes that update t, now copied to v.
+                    // Vertical bits (fine_y, coarse_y) must NOT be copied here
+                    // because compute_bg_pixel uses y + fine_y to determine scanline.
+                    self.render_v = (self.render_v & !0x041F) | (self.v & 0x041F);
+                    // Sync fine_x with the new horizontal scroll
+                    self.render_fine_x = self.fine_x;
                 }
                 // Evaluate sprites for the next scanline
                 let next_sl = if sl == PRERENDER_SCANLINE { 0 } else { sl + 1 };
@@ -451,6 +516,8 @@ impl Ppu {
         self.w = 0;
         let result = (s & 0xE0) | (self.last_bus_value & 0x1F);
         self.last_bus_value = result;
+        // VBlank suppression: if $2002 is read on the same PPU cycle that
+        // VBlank would be set (scanline 241, cycle 1), the VBlank is suppressed.
         if self.scanline == VBLANK_START && self.cycle == 1 && (s & 0x80) == 0 {
             self.vbl_suppressed = true;
         }
@@ -483,7 +550,9 @@ impl Ppu {
         self.ctrl = val;
         self.t = (self.t & 0xF3FF) | ((val as u16 & 3) << 10);
         if !was_nmi && val & 0x80 != 0 && self.status & 0x80 != 0 {
-            self.nmi_pending = true;
+            // NMI enable just turned on while VBlank is active.
+            // On real NES, NMI fires after the NEXT instruction, not immediately.
+            self.nmi_deferred = true;
         }
     }
 

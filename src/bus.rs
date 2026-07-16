@@ -162,7 +162,10 @@ impl Bus {
             let val = self.read(addr);
             self.ppu.oam[self.ppu.oam_addr as usize] = val;
             self.ppu.oam_addr = self.ppu.oam_addr.wrapping_add(1);
-            // OAM DMA timing handled externally by tick() advancing PPU
+            // Each OAM DMA byte transfer takes 2 CPU cycles (read + write).
+            // The PPU and APU must continue ticking during DMA.
+            self.ppu_tick(6);
+            self.apu.tick(2);
         }
     }
 

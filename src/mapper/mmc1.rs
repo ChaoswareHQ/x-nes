@@ -186,7 +186,17 @@ impl MapperImpl for Mmc1 {
     }
 
     fn mirroring(&self) -> u8 {
-        self.mirror
+        // MMC1 control register bits 1-0 control mirroring:
+        //   0 = one-screen (lower bank)
+        //   1 = one-screen (upper bank)
+        //   2 = vertical
+        //   3 = horizontal
+        // Our mirroring convention: 0 = horizontal, 1 = vertical
+        match self.control & 3 {
+            2 => 1,           // vertical
+            3 => 0,           // horizontal
+            _ => self.mirror, // one-screen modes (fallback to header)
+        }
     }
     fn irq_pending(&self) -> bool {
         false
