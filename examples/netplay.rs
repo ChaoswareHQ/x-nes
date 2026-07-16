@@ -178,10 +178,16 @@ struct App {
         ringbuf::CachingProd<std::sync::Arc<ringbuf::SharedRb<ringbuf::storage::Heap<f32>>>>,
     >,
     net: Option<NetPeer>,
+    is_player1: bool,
 }
 
 impl App {
-    fn new(rom_path: &str, connect_to: String, listen_on: Option<String>) -> Self {
+    fn new(
+        rom_path: &str,
+        connect_to: String,
+        listen_on: Option<String>,
+        is_player1: bool,
+    ) -> Self {
         let data =
             std::fs::read(rom_path).unwrap_or_else(|_| panic!("failed to read {}", rom_path));
         let rom = Rom::new(&data).expect("invalid iNES ROM");
@@ -208,6 +214,7 @@ impl App {
             audio_stream: None,
             audio_tx: None,
             net,
+            is_player1,
         }
     }
 }
@@ -291,17 +298,23 @@ impl ApplicationHandler for App {
             }
             WindowEvent::KeyboardInput { event, .. } if !event.repeat => {
                 let pressed = event.state == ElementState::Pressed;
+                // Host (P1): keyboard → pad1. Joiner (P2): keyboard → pad2.
+                let pad = if self.is_player1 {
+                    &mut self.bus.pad1
+                } else {
+                    &mut self.bus.pad2
+                };
                 match event.physical_key {
-                    PhysicalKey::Code(KeyCode::KeyZ) => self.bus.pad1.b = pressed,
-                    PhysicalKey::Code(KeyCode::KeyX) => self.bus.pad1.a = pressed,
+                    PhysicalKey::Code(KeyCode::KeyZ) => pad.b = pressed,
+                    PhysicalKey::Code(KeyCode::KeyX) => pad.a = pressed,
                     PhysicalKey::Code(KeyCode::ShiftLeft | KeyCode::ShiftRight) => {
-                        self.bus.pad1.select = pressed
+                        pad.select = pressed
                     }
-                    PhysicalKey::Code(KeyCode::Enter) => self.bus.pad1.start = pressed,
-                    PhysicalKey::Code(KeyCode::ArrowUp) => self.bus.pad1.up = pressed,
-                    PhysicalKey::Code(KeyCode::ArrowDown) => self.bus.pad1.down = pressed,
-                    PhysicalKey::Code(KeyCode::ArrowLeft) => self.bus.pad1.left = pressed,
-                    PhysicalKey::Code(KeyCode::ArrowRight) => self.bus.pad1.right = pressed,
+                    PhysicalKey::Code(KeyCode::Enter) => pad.start = pressed,
+                    PhysicalKey::Code(KeyCode::ArrowUp) => pad.up = pressed,
+                    PhysicalKey::Code(KeyCode::ArrowDown) => pad.down = pressed,
+                    PhysicalKey::Code(KeyCode::ArrowLeft) => pad.left = pressed,
+                    PhysicalKey::Code(KeyCode::ArrowRight) => pad.right = pressed,
                     _ => {}
                 }
             }
@@ -335,12 +348,19 @@ impl ApplicationHandler for App {
         }
 
         while self.acc >= self.frame_dur {
-            // Non-blocking netplay: send local, read latest remote
+            // Non-blocking netplay exchange
+            // Host (P1): sends own pad1, receives opponent's input as pad2
+            // Joiner (P2): sends own pad2, receives host's input as pad1
             if let Some(net) = &self.net {
-                let local = pad_to_byte(&self.bus.pad1);
-                net.send_input(local);
-                let remote = net.recv_input();
-                byte_to_pad(remote, &mut self.bus.pad2);
+                let (local_src, remote_dst) = if self.is_player1 {
+                    (&self.bus.pad1, &mut self.bus.pad2)
+                } else {
+                    (&self.bus.pad2, &mut self.bus.pad1)
+                };
+                let local_byte = pad_to_byte(local_src);
+                net.send_input(local_byte);
+                let remote_byte = net.recv_input();
+                byte_to_pad(remote_byte, remote_dst);
             }
 
             // Both sides now have the same inputs for this frame.
@@ -365,17 +385,22 @@ impl ApplicationHandler for App {
         while let Some(gilrs::Event { event, .. }) = self.gilrs.next_event() {
             if let gilrs::EventType::ButtonChanged(button, val, _) = event {
                 let pressed = val > 0.5;
+                let pad = if self.is_player1 {
+                    &mut self.bus.pad1
+                } else {
+                    &mut self.bus.pad2
+                };
                 match button {
-                    Button::South => self.bus.pad1.a = pressed,
-                    Button::East => self.bus.pad1.b = pressed,
-                    Button::DPadUp => self.bus.pad1.up = pressed,
-                    Button::DPadDown => self.bus.pad1.down = pressed,
-                    Button::DPadLeft => self.bus.pad1.left = pressed,
-                    Button::DPadRight => self.bus.pad1.right = pressed,
-                    Button::Select => self.bus.pad1.select = pressed,
-                    Button::Start => self.bus.pad1.start = pressed,
-                    Button::LeftTrigger | Button::RightTrigger => self.bus.pad1.a = pressed,
-                    Button::LeftTrigger2 | Button::RightTrigger2 => self.bus.pad1.b = pressed,
+                    Button::South => pad.a = pressed,
+                    Button::East => pad.b = pressed,
+                    Button::DPadUp => pad.up = pressed,
+                    Button::DPadDown => pad.down = pressed,
+                    Button::DPadLeft => pad.left = pressed,
+                    Button::DPadRight => pad.right = pressed,
+                    Button::Select => pad.select = pressed,
+                    Button::Start => pad.start = pressed,
+                    Button::LeftTrigger | Button::RightTrigger => pad.a = pressed,
+                    Button::LeftTrigger2 | Button::RightTrigger2 => pad.b = pressed,
                     _ => {}
                 }
             }
@@ -428,14 +453,14 @@ fn main() {
     let rom = rom_path.expect("no ROM specified");
 
     match (connect_to, listen_on) {
-        // Joiner: connect to host address
+        // Joiner: connected to host → I'm Player 2
         (Some(remote), listen) => {
-            let mut app = App::new(&rom, remote, listen);
+            let mut app = App::new(&rom, remote, listen, false);
             let el = EventLoop::new().expect("event loop");
             el.set_control_flow(ControlFlow::Poll);
             el.run_app(&mut app).expect("event loop failed");
         }
-        // Host: wait for P2, then run as joiner to P2's address
+        // Host: listening for P2 → I'm Player 1
         (None, Some(local)) => {
             eprintln!("Waiting for player 2 on {} ...", local);
             let sock = UdpSocket::bind(&local).expect("bind failed");
@@ -443,9 +468,8 @@ fn main() {
             let mut buf = [0u8; 1];
             let (_, src) = sock.recv_from(&mut buf).expect("no connection");
             eprintln!("Player 2 connected from {}", src);
-            // Connect back to P2 from the same local port
             let remote = format!("{}:{}", src.ip(), src.port());
-            let mut app = App::new(&rom, remote, Some(local));
+            let mut app = App::new(&rom, remote, Some(local), true);
             let el = EventLoop::new().expect("event loop");
             el.set_control_flow(ControlFlow::Poll);
             el.run_app(&mut app).expect("event loop failed");

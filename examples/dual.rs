@@ -148,12 +148,24 @@ impl EmuInstance {
         self.bus.ppu.frame_complete = false;
     }
 
-    fn sync_input(&mut self) {
+    /// Player 1 sends pad1, receives opponent's pad2 into own pad2.
+    /// Player 2 sends pad2, receives opponent's pad1 into own pad1.
+    fn sync_input_p1(&mut self) {
         if let Some(peer) = &self.peer {
             let local = pad_to_byte(&self.bus.pad1);
             peer.send_input(local);
             let remote = peer.recv_input();
             byte_to_pad(remote, &mut self.bus.pad2);
+        }
+    }
+
+    fn sync_input_p2(&mut self) {
+        if let Some(peer) = &self.peer {
+            // Player 2: send pad2, receive P1's input into pad1
+            let local = pad_to_byte(&self.bus.pad2);
+            peer.send_input(local);
+            let remote = peer.recv_input();
+            byte_to_pad(remote, &mut self.bus.pad1);
         }
     }
 }
@@ -292,17 +304,17 @@ impl ApplicationHandler for App {
                     PhysicalKey::Code(KeyCode::ArrowLeft) => self.emu1.bus.pad1.left = pressed,
                     PhysicalKey::Code(KeyCode::ArrowRight) => self.emu1.bus.pad1.right = pressed,
 
-                    // P2 (right): N, M, Comma, Period, WASD
+                    // P2 (right): N, M, Comma, Period, WASD → pad2
                     PhysicalKey::Code(KeyCode::KeyN | KeyCode::KeyV) => {
-                        self.emu2.bus.pad1.b = pressed
+                        self.emu2.bus.pad2.b = pressed
                     }
-                    PhysicalKey::Code(KeyCode::KeyM) => self.emu2.bus.pad1.a = pressed,
-                    PhysicalKey::Code(KeyCode::Comma) => self.emu2.bus.pad1.select = pressed,
-                    PhysicalKey::Code(KeyCode::Period) => self.emu2.bus.pad1.start = pressed,
-                    PhysicalKey::Code(KeyCode::KeyW) => self.emu2.bus.pad1.up = pressed,
-                    PhysicalKey::Code(KeyCode::KeyS) => self.emu2.bus.pad1.down = pressed,
-                    PhysicalKey::Code(KeyCode::KeyA) => self.emu2.bus.pad1.left = pressed,
-                    PhysicalKey::Code(KeyCode::KeyD) => self.emu2.bus.pad1.right = pressed,
+                    PhysicalKey::Code(KeyCode::KeyM) => self.emu2.bus.pad2.a = pressed,
+                    PhysicalKey::Code(KeyCode::Comma) => self.emu2.bus.pad2.select = pressed,
+                    PhysicalKey::Code(KeyCode::Period) => self.emu2.bus.pad2.start = pressed,
+                    PhysicalKey::Code(KeyCode::KeyW) => self.emu2.bus.pad2.up = pressed,
+                    PhysicalKey::Code(KeyCode::KeyS) => self.emu2.bus.pad2.down = pressed,
+                    PhysicalKey::Code(KeyCode::KeyA) => self.emu2.bus.pad2.left = pressed,
+                    PhysicalKey::Code(KeyCode::KeyD) => self.emu2.bus.pad2.right = pressed,
                     _ => {}
                 }
             }
@@ -355,9 +367,9 @@ impl ApplicationHandler for App {
         }
 
         while self.acc >= self.frame_dur {
-            // Exchange inputs between the two emulators
-            self.emu1.sync_input();
-            self.emu2.sync_input();
+            // Exchange inputs: P1 sends pad1, P2 sends pad2
+            self.emu1.sync_input_p1();
+            self.emu2.sync_input_p2();
 
             // Tick both
             self.emu1.tick_frame();
