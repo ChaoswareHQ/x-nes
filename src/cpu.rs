@@ -31,6 +31,8 @@ impl CpuRp2a03 {
     pub fn new(reset_addr: u16) -> Self {
         Self {
             pc: reset_addr,
+            st: 0xFD, // Real NES SP = $FD after reset
+            sr: 0x24, // I flag set + bit 5 always 1
             ..Self::default()
         }
     }
@@ -135,7 +137,7 @@ impl Default for CpuRp2a03 {
             x: 0,
             y: 0,
             st: 0,
-            sr: 0,
+            sr: 0x20, // Bit 5 is always 1 on the 6502
         }
     }
 }

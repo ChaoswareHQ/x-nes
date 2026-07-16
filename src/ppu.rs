@@ -22,12 +22,23 @@ pub struct Ppu {
 
     pub data_buffer: u8,
     pub last_bus_value: u8,
+    /// PPU cycle counter for open bus decay
+    pub tick_count: u64,
+    /// Tick when last_bus_value was last written
+    pub last_bus_write_tick: u64,
     pub scanline: u16,
     pub cycle: u16,
-    pub nmi_pending: bool,
-    // Deferred NMI: set when $2000 write enables NMI during VBlank.
-    // On real NES, NMI fires after the NEXT instruction, not immediately.
-    pub nmi_deferred: bool,
+    /// NMI edge-detect latch: set when the PPU's NMI output transitions
+    /// from high (1) to low (0). The CPU samples this latch on the
+    /// penultimate cycle of each instruction.
+    pub nmi_latched: bool,
+    /// Previous NMI output state for edge detection.
+    nmi_output: bool,
+    /// Set when NMI is latched by VBlank starting (fires immediately).
+    pub nmi_from_vblank: bool,
+    /// Set when penultimate-cycle sample finds nmi_latched (from $2000 write).
+    /// This deferred NMI fires at end of the NEXT instruction.
+    pub nmi_deferred_pending: bool,
     pub frame_complete: bool,
     pub frame: [u8; 61440],
     odd_frame: bool,
@@ -50,9 +61,31 @@ pub struct Ppu {
     render_v: u16,
     // Snapshot of fine_x at sync points (cycle 0 of prerender, cycle 257)
     render_fine_x: u8,
+    // Whether rendering was enabled when the current frame started (for odd frame skip)
+    frame_rendering_enabled: bool,
 }
 
 impl Ppu {
+    /// Recompute NMI output (VBlank_active AND NMI_enabled) and
+    /// detect rising edge (0→1 transition in NMI enable signal),
+    /// which corresponds to falling edge on /NMI pin.
+    /// Sets nmi_latched when edge is detected.
+    /// Sets nmi_from_vblank when the edge comes from VBlank starting.
+    #[inline(always)]
+    pub fn update_nmi_edge(&mut self, from_vblank: bool) {
+        let new_output = (self.status & 0x80 != 0) && (self.ctrl & 0x80 != 0);
+        let was_active = self.nmi_output;
+        // Rising edge on enable signal = falling edge on /NMI
+        let edge = !was_active && new_output;
+        if edge {
+            self.nmi_latched = true;
+            if from_vblank {
+                self.nmi_from_vblank = true;
+            }
+        }
+        self.nmi_output = new_output;
+    }
+
     pub fn new() -> Self {
         Self {
             vram: [0; 0x1000],
@@ -68,10 +101,14 @@ impl Ppu {
             w: 0,
             data_buffer: 0,
             last_bus_value: 0,
+            tick_count: 0,
+            last_bus_write_tick: 0,
             scanline: 0,
             cycle: 0,
-            nmi_pending: false,
-            nmi_deferred: false,
+            nmi_latched: false,
+            nmi_output: false,
+            nmi_from_vblank: false,
+            nmi_deferred_pending: false,
             frame_complete: false,
             frame: [0; 61440],
             odd_frame: true,
@@ -85,6 +122,7 @@ impl Ppu {
             vbl_suppressed: false,
             render_v: 0,
             render_fine_x: 0,
+            frame_rendering_enabled: false,
         }
     }
 
@@ -347,7 +385,21 @@ impl Ppu {
     }
 
     // ---- Main cycle-accurate tick ----
+    /// Get the PPU open bus value with decay applied.
+    /// Bits decay toward 0 over ~1 second (~60 frames) due to capacitance.
+    pub fn get_open_bus(&self) -> u8 {
+        const DECAY_CYCLES: u64 = 5_000_000; // ~60 frames worth of PPU ticks
+        let elapsed = self.tick_count.saturating_sub(self.last_bus_write_tick);
+        if elapsed >= DECAY_CYCLES {
+            return 0;
+        }
+        // Gradual decay: bits fade proportionally
+        let decay = (elapsed * 255 / DECAY_CYCLES) as u8;
+        self.last_bus_value & !(decay | decay >> 1 | decay >> 2)
+    }
+
     pub fn tick(&mut self, mapper: &mut Mapper) {
+        self.tick_count += 1;
         let sl = self.scanline;
         let cy = self.cycle;
 
@@ -407,17 +459,16 @@ impl Ppu {
         if cy == 1 && sl == VBLANK_START {
             if !self.vbl_suppressed {
                 self.status = (self.status | 0x80) & !0x20;
-                if self.ctrl & 0x80 != 0 {
-                    // NMI fires at end of current instruction if VBlank starts naturally.
-                    // This is distinct from the deferred NMI from $2000 writes.
-                    self.nmi_pending = true;
-                }
+                // Update NMI edge detection (VBlank just started - immediate NMI)
+                self.update_nmi_edge(true);
             }
             self.vbl_suppressed = false;
         }
         if cy == 1 && sl == PRERENDER_SCANLINE {
             // Clear VBL, sprite 0 hit, sprite overflow at cycle 1 of prerender
             self.status &= !0xE0;
+            // Update NMI edge detection (VBlank clearing - not from VBlank start)
+            self.update_nmi_edge(false);
         }
 
         // ===== Cycles 1-256: Visible rendering on visible/prerender scanlines =====
@@ -510,17 +561,27 @@ impl Ppu {
         }
     }
 
+    /// Set the PPU data bus value and track the write tick for open bus decay.
+    #[inline(always)]
+    fn set_last_bus_value(&mut self, val: u8) {
+        self.last_bus_value = val;
+        self.last_bus_write_tick = self.tick_count;
+    }
+
     pub fn read_status(&mut self) -> u8 {
         let s = self.status;
         self.status &= !0x80;
         self.w = 0;
-        let result = (s & 0xE0) | (self.last_bus_value & 0x1F);
+        let result = (s & 0xE0) | (self.get_open_bus() & 0x1F);
+        // $2002 read does NOT reset the open bus decay timer
         self.last_bus_value = result;
         // VBlank suppression: if $2002 is read on the same PPU cycle that
         // VBlank would be set (scanline 241, cycle 1), the VBlank is suppressed.
         if self.scanline == VBLANK_START && self.cycle == 1 && (s & 0x80) == 0 {
             self.vbl_suppressed = true;
         }
+        // Update NMI edge detection (clearing VBlank - not from VBlank start)
+        self.update_nmi_edge(false);
         result
     }
 
@@ -531,13 +592,19 @@ impl Ppu {
         } else {
             self.ppu_read_nt(addr, mapper.mirroring())
         };
-        let result = if addr < 0x3F00 { self.data_buffer } else { val };
+        let result = if addr < 0x3F00 {
+            self.data_buffer
+        } else {
+            // Palette read: high bits from open bus (decayed), low bits from palette
+            (self.get_open_bus() & 0xC0) | (val & 0x3F)
+        };
         if addr < 0x3F00 {
             self.data_buffer = val;
         } else {
             self.data_buffer = self.ppu_read_nt(addr & 0x2FFF, mapper.mirroring());
         }
-        self.last_bus_value = result;
+        // $2007 reads DO refresh the bus (unlike $2002)
+        self.set_last_bus_value(result);
         self.v = self
             .v
             .wrapping_add(if self.ctrl & 0x04 != 0 { 32 } else { 1 });
@@ -545,40 +612,46 @@ impl Ppu {
     }
 
     pub fn write_ctrl(&mut self, val: u8) {
-        self.last_bus_value = val;
-        let was_nmi = self.ctrl & 0x80 != 0;
+        self.set_last_bus_value(val);
         self.ctrl = val;
         self.t = (self.t & 0xF3FF) | ((val as u16 & 3) << 10);
-        if !was_nmi && val & 0x80 != 0 && self.status & 0x80 != 0 {
-            // NMI enable just turned on while VBlank is active.
-            // On real NES, NMI fires after the NEXT instruction, not immediately.
-            self.nmi_deferred = true;
+        // Update NMI edge detection. $2000 writes are from_vblank=false
+        // so nmi_from_vblank is NOT set. The NMI from $2000 writes is
+        // deferred to the next instruction (penultimate-cycle rule).
+        self.update_nmi_edge(false);
+        // If NMI is being disabled, clear the latch (NMI line goes high)
+        if val & 0x80 == 0 {
+            self.nmi_latched = false;
         }
     }
 
     pub fn write_mask(&mut self, val: u8) {
-        self.last_bus_value = val;
+        self.set_last_bus_value(val);
         self.mask = val;
     }
     pub fn write_oam_addr(&mut self, val: u8) {
-        self.last_bus_value = val;
+        self.set_last_bus_value(val);
         self.oam_addr = val;
     }
 
     pub fn write_oam_data(&mut self, val: u8) {
-        self.last_bus_value = val;
+        self.set_last_bus_value(val);
         self.oam[self.oam_addr as usize] = val;
         self.oam_addr = self.oam_addr.wrapping_add(1);
     }
 
     pub fn read_oam_data(&mut self) -> u8 {
-        let val = self.oam[self.oam_addr as usize];
-        self.last_bus_value = val;
+        let mut val = self.oam[self.oam_addr as usize];
+        // Bits 2-4 of sprite attribute bytes are always 0 when read via $2004
+        if self.oam_addr & 0x03 == 2 {
+            val &= 0xE3;
+        }
+        self.set_last_bus_value(val);
         val
     }
 
     pub fn write_scroll(&mut self, val: u8) {
-        self.last_bus_value = val;
+        self.set_last_bus_value(val);
         if self.w == 0 {
             self.t = (self.t & 0xFFE0) | ((val >> 3) as u16);
             self.fine_x = val & 7;
@@ -591,7 +664,7 @@ impl Ppu {
     }
 
     pub fn write_addr(&mut self, val: u8) {
-        self.last_bus_value = val;
+        self.set_last_bus_value(val);
         if self.w == 0 {
             self.t = ((self.t & 0x00FF) | ((val as u16) << 8)) & 0x3FFF;
             self.w = 1;
@@ -603,7 +676,7 @@ impl Ppu {
     }
 
     pub fn write_data(&mut self, val: u8, mapper: &mut Mapper) {
-        self.last_bus_value = val;
+        self.set_last_bus_value(val);
         let addr = self.v & 0x3FFF;
         if addr < 0x2000 {
             mapper.ppu_write(addr, val);

@@ -42,15 +42,16 @@ pub fn brk(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     cpu.set_pc(cpu.pc().wrapping_add(1));
     push(cpu, bus, (cpu.pc() >> 8) as u8);
     push(cpu, bus, cpu.pc() as u8);
-    cpu.set_flag(FLAG_BREAK, true);
-    push(cpu, bus, cpu.sr());
+    // BRK pushes SR with B flag SET and bit 5 always SET
+    let sr = (cpu.sr() | FLAG_BREAK) | 0x20;
+    push(cpu, bus, sr);
     cpu.set_flag(FLAG_INTERRUPT, true);
     cpu.set_pc(u16::from_le_bytes([bus.read(0xFFFE), bus.read(0xFFFF)]));
     7
 }
 
 pub fn rti(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let sr = pull(cpu, bus);
+    let sr = (pull(cpu, bus) & !FLAG_BREAK) | 0x20;
     cpu.set_sr(sr);
     let lo = pull(cpu, bus) as u16;
     let hi = pull(cpu, bus) as u16;

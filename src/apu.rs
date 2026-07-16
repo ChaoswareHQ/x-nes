@@ -524,6 +524,24 @@ impl Apu {
         self.dmc.sample_addr
     }
 
+    /// Tick only the DMC unit by one CPU cycle.
+    /// Used during bus accesses so DMC DMA can fire mid-instruction
+    /// (required by SHA/SHS/SHY/SHX for correct H computation).
+    #[inline(always)]
+    pub fn tick_dmc(&mut self) {
+        self.dmc.step();
+    }
+
+    /// Save DMC state for snapshot/restore around SH instructions.
+    pub fn save_dmc(&self) -> Dmc {
+        self.dmc.clone()
+    }
+
+    /// Restore DMC state (used for SH instruction per-access DMC ticking).
+    pub fn restore_dmc(&mut self, saved: &Dmc) {
+        self.dmc = saved.clone();
+    }
+
     fn clock_quarter_frame(&mut self) {
         self.p1.clock_envelope();
         self.p2.clock_envelope();
@@ -607,6 +625,51 @@ impl Apu {
             self.dmc.step();
 
             // APU runs at half CPU rate (2 CPU cycles = 1 APU cycle)
+            if self.cycles & 1 == 1 {
+                self.p1.step_timer();
+                self.p2.step_timer();
+                self.triangle.step_timer();
+                self.noise.step_timer();
+                self.clock_frame_counter();
+            }
+
+            self.sample_timer += 1.0;
+            if self.sample_timer >= self.sample_period {
+                self.sample_timer -= self.sample_period;
+                if self.sample_count < self.audio_samples.len() {
+                    let out = self.mixer_output();
+                    self.audio_samples[self.sample_count] = out;
+                    self.sample_count += 1;
+                }
+            }
+        }
+    }
+
+    /// Tick all APU components except DMC (DMC is ticked per bus access).
+    pub fn tick_without_dmc(&mut self, cpu_cycles: u16) {
+        for _ in 0..cpu_cycles {
+            self.cycles += 1;
+
+            // Handle $4017 write delay
+            if self.fc_delay > 0 {
+                self.fc_delay -= 1;
+                if self.fc_delay == 0 && self.fc_write_pending {
+                    self.frame_mode = self.fc_pending_mode;
+                    self.interrupt_inhibit = self.fc_pending_inhibit;
+                    if self.interrupt_inhibit {
+                        self.frame_irq = false;
+                    }
+                    self.frame_cycles = 0;
+                    if self.frame_mode {
+                        self.clock_quarter_frame();
+                        self.clock_half_frame();
+                    }
+                    self.fc_write_pending = false;
+                }
+            }
+
+            // NOTE: DMC step is skipped here - ticked via tick_dmc() in bus accesses
+
             if self.cycles & 1 == 1 {
                 self.p1.step_timer();
                 self.p2.step_timer();

@@ -19,6 +19,7 @@ exclude = [".github/", "fpga"]
 default = ["std"]
 std = []
 save_states = []
+retroarch = []
 rewind = []
 ffi = []
 
