@@ -20,7 +20,7 @@ A lightweight, cycle-accurate NES emulator **library** written in Rust, designed
 > - **Audio** — timing is slightly fast, some tones are off. APU is functional but needs refinement.
 > - **Graphics** — some games render incorrectly; edge-case PPU behaviors are still being ironed out.
 > - **MMC3 mapper** (used by Super Mario Bros. 3, Mega Man 3, etc.) — **not yet supported.** Currently implements NROM, UxROM, CNROM, AxROM, GxROM, and MMC1.
-> - **Accuracy** — passes **86% of the AccuracyCoin test suite**. Blargg CPU and PPU tests pass cleanly.
+> - **Accuracy** — passes **60% of the AccuracyCoin test suite**. Blargg CPU and PPU tests pass cleanly.
 
 See the [issues page](https://github.com/ChaoswareHQ/x-nes/issues) for the full roadmap.
 
