@@ -31,12 +31,12 @@ impl Triangle {
         if !self.enabled || self.length_counter == 0 || self.linear_counter == 0 {
             return 0;
         }
-        // Triangle sequencer: counts up 0..15 then down 15..0
-        // Output is 4-bit (0-15) for the DAC mixer formula
+        // Triangle sequencer: 15,14,...,0,0,1,...,15
+        // Matches Mesen's _sequence array
         if self.sequencer < 16 {
-            self.sequencer
+            15 - self.sequencer
         } else {
-            31 - self.sequencer
+            self.sequencer - 16
         }
     }
 }

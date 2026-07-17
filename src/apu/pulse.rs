@@ -36,17 +36,22 @@ impl Pulse {
     }
 
     pub(super) fn clock_sweep(&mut self) {
-        let divider_zero = self.sweep_divider == 0;
+        // Decrement divider (wrapping for initial 0→255 behavior)
+        self.sweep_divider = self.sweep_divider.wrapping_sub(1);
 
-        if divider_zero && self.sweep_enabled && self.sweep_shift > 0 && !self.is_sweep_muted() {
-            self.timer_load = self.sweep_calc_target();
+        if self.sweep_divider == 0 {
+            // Apply sweep when divider reaches 0
+            if self.sweep_enabled && self.sweep_shift > 0 && !self.is_sweep_muted() {
+                self.timer_load = self.sweep_calc_target();
+            }
+            // Reset divider (always reset when it hits 0, even if sweep not applied)
+            self.sweep_divider = self.sweep_period;
         }
 
-        if divider_zero || self.sweep_reload {
+        // Handle reload flag (set by $4001/$4005 write)
+        if self.sweep_reload {
             self.sweep_divider = self.sweep_period;
             self.sweep_reload = false;
-        } else {
-            self.sweep_divider -= 1;
         }
     }
 

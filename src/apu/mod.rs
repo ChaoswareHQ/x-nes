@@ -147,6 +147,11 @@ pub struct Dmc {
 
 pub struct Apu {
     pub cycles: u64,
+    /// Accumulates sub-cycle timing for timer/FC stepping.
+    /// The APU clocks timers and frame counter at half the CPU rate.
+    /// This accumulator tracks CPU cycles and steps them every 2 cycles,
+    /// carrying forward fractional cycles for accurate long-term timing.
+    apu_phase: u64,
     pub p1: Pulse,
     pub p2: Pulse,
     triangle: Triangle,
@@ -179,6 +184,7 @@ impl Apu {
     pub fn new() -> Self {
         Self {
             cycles: 0,
+            apu_phase: 0,
             p1: Pulse {
                 is_pulse1: true,
                 ..Pulse::default()
@@ -347,8 +353,12 @@ impl Apu {
             // DMC step runs every CPU cycle
             self.dmc.step();
 
-            // APU runs at half CPU rate (2 CPU cycles = 1 APU cycle)
-            if self.cycles & 1 == 1 {
+            // APU timers and frame counter are clocked at half the CPU rate.
+            // Use a phase accumulator to carry fractional cycles forward,
+            // avoiding the accumulated drift from odd-length instructions.
+            self.apu_phase += 1;
+            if self.apu_phase >= 2 {
+                self.apu_phase -= 2;
                 self.p1.step_timer();
                 self.p2.step_timer();
                 self.triangle.step_timer();
@@ -393,7 +403,10 @@ impl Apu {
 
             // NOTE: DMC step is skipped here - ticked via tick_dmc() in bus accesses
 
-            if self.cycles & 1 == 1 {
+            // APU timers and frame counter: per-cycle phase accumulator
+            self.apu_phase += 1;
+            if self.apu_phase >= 2 {
+                self.apu_phase -= 2;
                 self.p1.step_timer();
                 self.p2.step_timer();
                 self.triangle.step_timer();
@@ -469,7 +482,6 @@ impl Apu {
                     status |= 0x40;
                 }
                 self.frame_irq = false;
-                self.dmc.irq = false;
                 status
             }
             // $4016 and $4017 reads go through the controller, but APU catches
@@ -488,7 +500,7 @@ impl Apu {
             }
             0x4001 => {
                 self.p1.sweep_enabled = val & 0x80 != 0;
-                self.p1.sweep_period = (val >> 4) & 7;
+                self.p1.sweep_period = ((val >> 4) & 7) + 1;
                 self.p1.sweep_negate = val & 0x08 != 0;
                 self.p1.sweep_shift = val & 0x07;
                 self.p1.sweep_reload = true;
@@ -498,6 +510,7 @@ impl Apu {
             }
             0x4003 => {
                 self.p1.timer_load = (self.p1.timer_load & 0x00FF) | ((val as u16 & 7) << 8);
+                self.p1.timer_val = self.p1.timer_load; // reload timer immediately
                 self.p1.duty_step = 0;
                 self.p1.env_start = true;
                 if self.p1.enabled {
@@ -513,7 +526,7 @@ impl Apu {
             }
             0x4005 => {
                 self.p2.sweep_enabled = val & 0x80 != 0;
-                self.p2.sweep_period = (val >> 4) & 7;
+                self.p2.sweep_period = ((val >> 4) & 7) + 1;
                 self.p2.sweep_negate = val & 0x08 != 0;
                 self.p2.sweep_shift = val & 0x07;
                 self.p2.sweep_reload = true;
@@ -523,6 +536,7 @@ impl Apu {
             }
             0x4007 => {
                 self.p2.timer_load = (self.p2.timer_load & 0x00FF) | ((val as u16 & 7) << 8);
+                self.p2.timer_val = self.p2.timer_load; // reload timer immediately
                 self.p2.duty_step = 0;
                 self.p2.env_start = true;
                 if self.p2.enabled {
@@ -548,6 +562,7 @@ impl Apu {
                 // Triangle timer high + length counter
                 self.triangle.timer_load =
                     (self.triangle.timer_load & 0x00FF) | ((val as u16 & 7) << 8);
+                self.triangle.timer_val = self.triangle.timer_load; // reload timer immediately
                 self.triangle.linear_reload = true;
                 if self.triangle.enabled {
                     let idx = (val >> 3) as usize;
