@@ -82,29 +82,33 @@ jobs:
           TOTAL=$(grep -E '^  TOTAL: [0-9]+$' test_output.log | grep -oP '\d+$')
           if [ -n "$TOTAL" ] && [ "$TOTAL" -gt 0 ]; then
             PCT=$((PASS * 100 / TOTAL))
-            echo "score=$PCT" >> $GITHUB_OUTPUT
+            echo "pass=$PASS" >> $GITHUB_OUTPUT
+            echo "total=$TOTAL" >> $GITHUB_OUTPUT
+            echo "score=${PASS}/${TOTAL}" >> $GITHUB_OUTPUT
             echo "Computed: $PASS / $TOTAL = ${PCT}%"
           else
-            echo "score=0" >> $GITHUB_OUTPUT
+            echo "pass=0" >> $GITHUB_OUTPUT
+            echo "total=0" >> $GITHUB_OUTPUT
+            echo "score=0/0" >> $GITHUB_OUTPUT
             echo "Could not compute score"
           fi
 
       - name: Update README badge with score
-        if: github.ref == 'refs/heads/main' && steps.grade.outputs.score != ''
+        if: github.ref == 'refs/heads/main' && steps.grade.outputs.score != '0/0'
         run: |
           SCORE="${{ steps.grade.outputs.score }}"
-          echo "Updating README accuracy score to $SCORE%"
-          sed -i "s/passes \*\*[0-9]*%/passes **${SCORE}%/g" README.md
+          echo "Updating README accuracy score to $SCORE"
+          sed -i "s/passes \*\*[0-9]*\/\?[0-9]*\*\* of the AccuracyCoin/passes **${SCORE}** of the AccuracyCoin/g" README.md
           grep "AccuracyCoin" README.md
 
       - name: Commit updated score
-        if: github.ref == 'refs/heads/main' && steps.grade.outputs.score != ''
+        if: github.ref == 'refs/heads/main' && steps.grade.outputs.score != '0/0'
         run: |
           if ! git diff --quiet README.md; then
             git config user.name "x-nes bot"
             git config user.email "bot@x-nes.dev"
             git add README.md
-            git commit -m "Update accuracy score to ${{ steps.grade.outputs.score }}% [skip ci]"
+            git commit -m "Update accuracy to ${{ steps.grade.outputs.score }} [skip ci]"
             git push
             echo "README updated with new accuracy score"
           else
