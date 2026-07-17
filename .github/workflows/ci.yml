@@ -33,6 +33,76 @@ jobs:
       - name: Clippy
         run: cargo clippy --release -- -D warnings
 
+  tests:
+    name: ROM accuracy tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Run ROM tests with grade output
+        run: |
+          cargo test --release -- --nocapture 2>&1 | tee test_output.log
+
+      - name: Extract AccuracyCoin grade
+        id: grade
+        run: |
+          echo "=== ACCURACYCOIN GRADE ==="
+          grep -A 20 "AccuracyCoin Test Results" test_output.log | grep -v "Debug RAM" | grep -v "^--" || echo "Grade not found"
+          echo ""
+          echo "=== BLARGG TEST SUMMARY ==="
+          grep -E "^  (PASS|FAIL|\?)" test_output.log || echo "(no blargg results)"
+
+          # Parse PASS count and calculate percentage
+          # Only match lines like "  PASS: 120" (pure number), not blargg lines like "  PASS: palette_ram (54 frames)"
+          PASS=$(grep -E '^  PASS: [0-9]+$' test_output.log | grep -oP '\d+$')
+          TOTAL=$(grep -E '^  TOTAL: [0-9]+$' test_output.log | grep -oP '\d+$')
+          if [ -n "$TOTAL" ] && [ "$TOTAL" -gt 0 ]; then
+            PCT=$((PASS * 100 / TOTAL))
+            echo "score=$PCT" >> $GITHUB_OUTPUT
+            echo "Computed: $PASS / $TOTAL = ${PCT}%"
+          else
+            echo "score=0" >> $GITHUB_OUTPUT
+            echo "Could not compute score"
+          fi
+
+      - name: Update README badge with score
+        if: github.ref == 'refs/heads/main' && steps.grade.outputs.score != ''
+        run: |
+          SCORE="${{ steps.grade.outputs.score }}"
+          echo "Updating README accuracy score to $SCORE%"
+          sed -i "s/passes \*\*[0-9]*%/passes **${SCORE}%/g" README.md
+          grep "AccuracyCoin" README.md
+
+      - name: Commit updated score
+        if: github.ref == 'refs/heads/main' && steps.grade.outputs.score != ''
+        run: |
+          if ! git diff --quiet README.md; then
+            git config user.name "x-nes bot"
+            git config user.email "bot@x-nes.dev"
+            git add README.md
+            git commit -m "Update accuracy score to ${{ steps.grade.outputs.score }}% [skip ci]"
+            git push
+            echo "README updated with new accuracy score"
+          else
+            echo "No change in accuracy score"
+          fi
+
   book:
     name: Build and deploy book
     runs-on: ubuntu-latest
