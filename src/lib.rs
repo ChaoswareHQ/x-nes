@@ -40,6 +40,9 @@ pub mod bus;
 pub mod clock;
 pub mod cpu;
 
+#[cfg(feature = "decompiler")]
+pub mod decompiler;
+
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
