@@ -34,7 +34,7 @@ See the [issues page](https://github.com/ChaoswareHQ/x-nes/issues) for the full 
 - **`no_std` by default** — works on bare metal (MCUs, MPUs)
 - **Dual library output** — `lib`, `cdylib` (shared), and `staticlib` for flexible integration
 - **C-compatible FFI** — exposes `nes_*` functions for easy embedding (optional, via `ffi` feature)
-- **Optional features** — `save_states`, `rewind`, `retroarch`, and `std` for testing
+- **Optional features** — `save_states`, `rewind`, `retroarch`, and `std` for testing (in development)
 - **Tiny footprint** — ~150–200 KB shared library (fully stripped)
 
 ## Building
