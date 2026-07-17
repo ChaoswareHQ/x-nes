@@ -1,19 +1,41 @@
 # x-nes
 
-A lightweight NES emulator core written in Rust, designed to run everywhere – from microcontrollers to modern desktops. It exposes a clean Rust API and a C‑compatible FFI for use from Lua, C, or any other language.
+[![Crates.io Version](https://img.shields.io/crates/v/x-nes)](https://crates.io/crates/x-nes)
+[![Crates.io Downloads](https://img.shields.io/crates/d/x-nes)](https://crates.io/crates/x-nes)
+[![docs.rs](https://img.shields.io/docsrs/x-nes)](https://docs.rs/x-nes)
+[![CI](https://img.shields.io/github/actions/workflow/status/ChaoswareHQ/x-nes/ci.yml?branch=main)](https://github.com/ChaoswareHQ/x-nes/actions)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](#license)
+[![Rust](https://img.shields.io/badge/rust-1.97%2B-orange)](https://www.rust-lang.org)
+
+A lightweight, cycle-accurate NES emulator **library** written in Rust, designed to run everywhere — from microcontrollers to modern desktops. Exposes a clean Rust API and a C-compatible FFI for use from Lua, C, or any other language.
 
 **[Read the Book](https://chaoswarehq.github.io/x-nes/)** — a complete walkthrough of the architecture, instruction set, PPU, and performance techniques.
 
+---
+
+## Status
+
+> **Beta.** The core emulation is solid for many games, but there are known issues:
+>
+> - **Audio** — timing is slightly fast, some tones are off. APU is functional but needs refinement.
+> - **Graphics** — some games render incorrectly; edge-case PPU behaviors are still being ironed out.
+> - **MMC3 mapper** (used by Super Mario Bros. 3, Mega Man 3, etc.) — **not yet supported.** Currently implements NROM, UxROM, CNROM, AxROM, GxROM, and MMC1.
+> - **Accuracy** — passes **86% of the AccuracyCoin test suite**. Blargg CPU and PPU tests pass cleanly.
+
+See the [issues page](https://github.com/ChaoswareHQ/x-nes/issues) for the full roadmap.
+
+---
+
 ## Features
 
-- **Cycle‑accurate 6502 CPU** – all 56 instructions, 13 addressing modes
-- **PPU** – scanline‑accurate rendering with NMI generation
-- **iNES ROM parser** – mapper and mirroring metadata support
-- **`no_std` by default** – works on bare metal (MCUs, MPUs)
-- **Dual library output** – both `cdylib` (shared) and `staticlib` for flexible integration
-- **C‑compatible FFI** – exposes `nes_*` functions for easy embedding (optional, via `ffi` feature)
-- **Optional features** – `save_states`, `rewind`, and `std` for testing
-- **Tiny footprint** – ~150‑200 KB shared library (fully stripped)
+- **Cycle-accurate 6502 CPU** — all 56 instructions, 13 addressing modes
+- **PPU** — scanline-accurate rendering with NMI generation
+- **iNES ROM parser** — mapper and mirroring metadata support
+- **`no_std` by default** — works on bare metal (MCUs, MPUs)
+- **Dual library output** — `lib`, `cdylib` (shared), and `staticlib` for flexible integration
+- **C-compatible FFI** — exposes `nes_*` functions for easy embedding (optional, via `ffi` feature)
+- **Optional features** — `save_states`, `rewind`, `retroarch`, and `std` for testing
+- **Tiny footprint** — ~150–200 KB shared library (fully stripped)
 
 ## Building
 
@@ -56,7 +78,7 @@ let data = std::fs::read("game.nes").unwrap();
 let rom = Rom::new(&data).unwrap();
 
 let mut cpu = CpuRp2a03::new(0x0000);
-let mut bus = Bus::new(&rom.prg, &rom.chr, rom.mirroring);
+let mut bus = Bus::new(rom.create_mapper());
 reset(&mut cpu, &mut bus);
 
 loop {
@@ -105,15 +127,44 @@ end
 | Module | Description |
 |--------|-------------|
 | `cpu` | RP2A03 CPU registers, flags, and instruction fetch |
-| `ops` | 256‑entry jump table with all instruction implementations |
+| `ops` | 256-entry jump table with all instruction implementations |
 | `bus` | Memory bus with RAM, PPU/APU routing, and OAM DMA |
 | `ppu` | Picture Processing Unit with scanline timing and sprite evaluation |
 | `apu` | Audio Processing Unit (pulse channels, sample buffer) |
-| `rom` | iNES ROM header parser and NROM mapper support |
-| `ffi` | Optional C‑compatible API (enabled by `ffi` feature) |
+| `rom` | iNES ROM header parser and mapper dispatch |
+| `mapper` | Mapper implementations (NROM, UxROM, CNROM, AxROM, GxROM, MMC1) |
+| `ffi` | Optional C-compatible API (enabled by `ffi` feature) |
 | `clock` | Master clock cycle conversions |
 | `interrupt` | Vector address constants (NMI, RESET, IRQ) |
 | `address` | Memory region classification helpers |
+
+## Roadmap
+
+- [x] Cycle-accurate CPU + official instructions
+- [x] PPU scanline rendering + NMI
+- [x] APU (basic timing, pulse channels)
+- [x] iNES ROM parser + NROM, UxROM, CNROM, AxROM, GxROM, MMC1
+- [ ] MMC3 mapper (SMB3, Mega Man 3, etc.)
+- [ ] Audio accuracy refinements
+- [ ] PPU edge-case fixes (sprite evaluation corner cases)
+- [ ] RetroArch integration
+- [ ] WASM target support
+
+## Contributing
+
+Contributions are welcome! This project aims to be the most accurate NES emulator library in Rust. If you can fix a bug, implement a mapper, or improve audio timing, jump in.
+
+- Open [issues](https://github.com/ChaoswareHQ/x-nes/issues) for bugs or feature requests
+- PRs are reviewed promptly
+- See the book for architecture docs before diving in
+
+## Support
+
+If you find this project useful, consider supporting its development:
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-azzodude-yellow?logo=buymeacoffee)](https://buymeacoffee.com/azzodude)
+
+Your support helps sustain ongoing work on accuracy, mappers, and features like RetroArch integration.
 
 ## License
 
