@@ -20,7 +20,7 @@ A lightweight, cycle-accurate NES emulator **library** written in Rust, designed
 > - **Audio** — timing is slightly fast, some tones are off. APU is functional but needs refinement.
 > - **Graphics** — some games render incorrectly; edge-case PPU behaviors are still being ironed out.
 > - **MMC3 mapper** (used by Super Mario Bros. 3, Mega Man 3, etc.) — **not yet supported.** Currently implements NROM, UxROM, CNROM, AxROM, GxROM, and MMC1.
-> - **Accuracy** — passes **61% of the AccuracyCoin test suite** (86/141 pass). Blargg tests: **20/21 pass** (ppu_vbl_nmi fails on NMI timing subtest 5).
+> - **Accuracy** — passes **86/141** of the AccuracyCoin test suite (61%). Blargg tests: **20/21 pass** (ppu_vbl_nmi fails on NMI timing subtest 5).
 >
 > **AccuracyCoin failures by area:**
 >
