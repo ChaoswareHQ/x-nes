@@ -1,0 +1,291 @@
+// PPU module - Picture Processing Unit
+//
+// Organized by functionality:
+// - bus.rs: VRAM address space, nametable/palette access, open bus decay
+// - render.rs: Background/sprite pixel rendering, tile fetching
+// - registers.rs: PPU register read/write, NMI edge detection
+
+mod bus;
+mod registers;
+mod render;
+
+use crate::mapper::Mapper;
+
+const VISIBLE_SCANLINES: u16 = 240;
+const VBLANK_START: u16 = 241;
+const PRERENDER_SCANLINE: u16 = 261;
+
+#[allow(dead_code)]
+pub struct Ppu {
+    pub vram: [u8; 0x1000],
+    pub palette: [u8; 0x20],
+    pub oam: [u8; 0x100],
+
+    pub ctrl: u8,
+    pub mask: u8,
+    pub status: u8,
+    pub oam_addr: u8,
+
+    pub v: u16,
+    pub t: u16,
+    pub fine_x: u8,
+    pub w: u8,
+
+    pub data_buffer: u8,
+    pub last_bus_value: u8,
+    /// PPU cycle counter for open bus decay
+    pub tick_count: u64,
+    /// Tick when `last_bus_value` was last written
+    pub last_bus_write_tick: u64,
+    pub scanline: u16,
+    pub cycle: u16,
+    /// NMI edge-detect latch: set when the PPU's NMI output transitions
+    /// from high (1) to low (0). The CPU samples this latch on the
+    /// penultimate cycle of each instruction.
+    pub nmi_latched: bool,
+    /// Previous NMI output state for edge detection.
+    nmi_output: bool,
+    /// Set when NMI is latched by `VBlank` starting (fires immediately).
+    pub nmi_from_vblank: bool,
+    /// Set when penultimate-cycle sample finds `nmi_latched` (from $2000 write).
+    /// This deferred NMI fires at end of the NEXT instruction.
+    pub nmi_deferred_pending: bool,
+    pub frame_complete: bool,
+    pub frame: [u8; 61440],
+    odd_frame: bool,
+
+    // Sprite rendering state
+    sprite_count: u8,
+    sprite_indices: [u8; 8],
+    sprite_zero_hit_possible: bool,
+
+    // Background shift registers
+    bg_shift_low: u16,
+    bg_shift_high: u16,
+    bg_attr_shift_low: u16,
+    bg_attr_shift_high: u16,
+
+    // VBL suppression
+    vbl_suppressed: bool,
+
+    // Snapshot of v register at start of scanline (for stable scroll)
+    render_v: u16,
+    // Snapshot of fine_x at sync points (cycle 0 of prerender, cycle 257)
+    render_fine_x: u8,
+    // Whether rendering was enabled when the current frame started (for odd frame skip)
+    frame_rendering_enabled: bool,
+}
+
+impl Ppu {
+    pub fn new() -> Self {
+        Self {
+            vram: [0; 0x1000],
+            palette: [0; 0x20],
+            oam: [0; 0x100],
+            ctrl: 0,
+            mask: 0,
+            status: 0,
+            oam_addr: 0,
+            v: 0,
+            t: 0,
+            fine_x: 0,
+            w: 0,
+            data_buffer: 0,
+            last_bus_value: 0,
+            tick_count: 0,
+            last_bus_write_tick: 0,
+            scanline: 0,
+            cycle: 0,
+            nmi_latched: false,
+            nmi_output: false,
+            nmi_from_vblank: false,
+            nmi_deferred_pending: false,
+            frame_complete: false,
+            frame: [0; 61440],
+            odd_frame: true,
+            sprite_count: 0,
+            sprite_indices: [0; 8],
+            sprite_zero_hit_possible: true,
+            bg_shift_low: 0,
+            bg_shift_high: 0,
+            bg_attr_shift_low: 0,
+            bg_attr_shift_high: 0,
+            vbl_suppressed: false,
+            render_v: 0,
+            render_fine_x: 0,
+            frame_rendering_enabled: false,
+        }
+    }
+
+    fn rendering_enabled(&self) -> bool {
+        self.mask & 0x18 != 0
+    }
+
+    fn rendering_or_prerender(&self) -> bool {
+        self.scanline < VISIBLE_SCANLINES || self.scanline == PRERENDER_SCANLINE
+    }
+
+    // ---- Scroll register operations ----
+    fn increment_coarse_x(&mut self) {
+        if (self.v & 0x001F) == 31 {
+            self.v = (self.v & !0x001F) ^ 0x0400;
+        } else {
+            self.v += 1;
+        }
+    }
+
+    fn increment_coarse_y(&mut self) {
+        // Real NES increment_coarse_y: first handle fine_y, then coarse_y.
+        // But the order doesn't matter for the same-tick result.
+        let y = self.v & 0x03E0;
+        self.v = if y == 0x03C0 {
+            // coarse_y = 30: wrap to 0, toggle vertical NT (bit 11)
+            (self.v & !0x03E0) ^ 0x0800
+        } else if y == 0x03E0 {
+            // coarse_y = 31: wrap to 0, toggle horizontal NT (bit 10)
+            (self.v & !0x03E0) ^ 0x0400
+        } else {
+            self.v + 0x0020
+        };
+        // Handle fine_y (bits 12-14)
+        if (self.v >> 12) & 7 == 7 {
+            self.v &= !0x7000;
+        } else {
+            self.v += 0x1000;
+        }
+    }
+
+    fn copy_horizontal(&mut self) {
+        self.v = (self.v & !0x041F) | (self.t & 0x041F);
+    }
+
+    fn copy_vertical(&mut self) {
+        self.v = (self.v & !0x7BE0) | (self.t & 0x7BE0);
+    }
+
+    // ---- Main cycle-accurate tick ----
+    pub fn tick(&mut self, mapper: &mut Mapper) {
+        self.tick_count += 1;
+        let sl = self.scanline;
+        let cy = self.cycle;
+
+        // ===== Cycle advance / scanline management =====
+        // On odd frames with rendering enabled, the prerender scanline (261)
+        // has 340 cycles instead of 341. Cycle 340 is skipped.
+        // The skip is checked AFTER processing cycle 339 (when cy == 339
+        // and we're about to increment to cy == 340 for the next tick).
+        // We achieve this by checking cy == 339 at the START of the tick:
+        // on skip, process cycle 339, then advance (skipping the cy=340 tick).
+        // On normal, just process and let the next tick (cy=340) handle advance.
+        if cy > 339 {
+            self.cycle = 0;
+            let ns = sl.wrapping_add(1);
+            if ns > 261 {
+                self.scanline = 0;
+                self.odd_frame = !self.odd_frame;
+                self.frame_complete = true;
+            } else {
+                self.scanline = ns;
+            }
+            // Cycle 0 of scanline 261 (prerender): vertical scroll copy, clear flags
+            if self.scanline == PRERENDER_SCANLINE {
+                self.sprite_zero_hit_possible = true;
+                if self.rendering_enabled() {
+                    self.copy_vertical();
+                }
+                // Snapshot initial scroll after copy_vertical at the prerender.
+                self.render_v = self.v;
+                // Also snapshot fine_x (from VBlank $2005 writes).
+                // This ensures fine_x and coarse_x are in sync.
+                self.render_fine_x = self.fine_x;
+            }
+            return;
+        }
+        self.cycle += 1;
+
+        // Odd frame skip: after processing cycle 339 (now cy=340),
+        // and we're on prerender + odd frame + rendering, skip forward.
+        if self.scanline == PRERENDER_SCANLINE
+            && self.cycle == 340
+            && self.odd_frame
+            && (self.mask & 0x18) != 0
+        {
+            // Skip cycle 340 entirely - go directly to scanline 0
+            // render_v is NOT updated here - it retains the initial scroll
+            // from cycle 0 of prerender + horizontal bits from cycle 257.
+            self.cycle = 0;
+            self.scanline = 0;
+            self.odd_frame = !self.odd_frame;
+            self.frame_complete = true;
+            self.sprite_zero_hit_possible = true;
+            return;
+        }
+
+        // ===== Cycle 1: VBlank set / prerender VBL clear =====
+        if cy == 1 && sl == VBLANK_START {
+            if !self.vbl_suppressed {
+                self.status = (self.status | 0x80) & !0x20;
+                // Update NMI edge detection (VBlank just started - immediate NMI)
+                self.update_nmi_edge(true);
+            }
+            self.vbl_suppressed = false;
+        }
+        if cy == 1 && sl == PRERENDER_SCANLINE {
+            // Clear VBL, sprite 0 hit, sprite overflow at cycle 1 of prerender
+            self.status &= !0xE0;
+            // Update NMI edge detection (VBlank clearing - not from VBlank start)
+            self.update_nmi_edge(false);
+        }
+
+        // ===== Cycles 1-256: Visible rendering on visible/prerender scanlines =====
+        if self.rendering_or_prerender() {
+            if cy >= 1 && cy <= 256 {
+                // Fetch next tile every 8 cycles (shift register pipeline)
+                if self.rendering_enabled() && (cy & 7) == 1 {
+                    self.fetch_bg_tile(mapper);
+                    self.increment_coarse_x();
+                }
+                // Shift registers
+                self.bg_shift_low <<= 1;
+                self.bg_shift_high <<= 1;
+                self.bg_attr_shift_low <<= 1;
+                self.bg_attr_shift_high <<= 1;
+                // Render pixel on visible scanlines
+                if sl < VISIBLE_SCANLINES {
+                    self.render_pixel(cy - 1, sl, mapper);
+                }
+                // At cycle 256: increment vertical scroll
+                // NOTE: render_v is NOT updated here - it keeps the initial scroll
+                // from cycle 0 of prerender. The scanline progression (y) in
+                // compute_bg_pixel handles fine_y/coarse_y advancement.
+                if cy == 256 && self.rendering_enabled() {
+                    self.increment_coarse_y();
+                }
+            }
+
+            // ===== Cycle 257: Copy horizontal scroll, evaluate sprites for NEXT scanline =====
+            if cy == 257 {
+                if self.rendering_enabled() {
+                    self.copy_horizontal();
+                    // Copy ONLY horizontal bits from v to render_v (coarse_x + NT select)
+                    // This reflects $2005 writes that update t, now copied to v.
+                    // Vertical bits (fine_y, coarse_y) must NOT be copied here
+                    // because compute_bg_pixel uses y + fine_y to determine scanline.
+                    self.render_v = (self.render_v & !0x041F) | (self.v & 0x041F);
+                    // Sync fine_x with the new horizontal scroll
+                    self.render_fine_x = self.fine_x;
+                }
+                // Evaluate sprites for the next scanline
+                let next_sl = if sl == PRERENDER_SCANLINE { 0 } else { sl + 1 };
+                self.evaluate_sprites_for(next_sl);
+            }
+        }
+    }
+
+    pub fn tick_batch(&mut self, mut count: u16, mapper: &mut Mapper) {
+        while count > 0 {
+            self.tick(mapper);
+            count -= 1;
+        }
+    }
+}

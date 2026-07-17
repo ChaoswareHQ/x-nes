@@ -1,3 +1,16 @@
+// APU module - Audio Processing Unit
+//
+// Organized by channel:
+// - pulse.rs: Pulse 1 & 2 channels (envelope, sweep, timer, duty)
+// - triangle.rs: Triangle channel (linear counter, sequencer)
+// - noise.rs: Noise channel (LFSR, envelope)
+// - dmc.rs: DMC channel (delta modulation, DMA)
+
+mod dmc;
+mod noise;
+mod pulse;
+mod triangle;
+
 const LENGTH_TABLE: [u8; 32] = [
     10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22,
     192, 24, 72, 26, 16, 28, 32, 30,
@@ -15,6 +28,11 @@ const DMC_RATES: [u16; 16] = [
 // Duty 2: 0b00011110 -> 0,1,1,1,1,0,0,0  (50%)
 // Duty 3: 0b11001111 -> 1,0,0,1,1,1,1,1  (25% negated)
 const DUTY_SEQUENCES: [u8; 4] = [0x02, 0x06, 0x1E, 0xCF];
+
+// Noise period table (CPU cycles)
+const NOISE_PERIODS: [u16; 16] = [
+    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
+];
 
 #[derive(Default, Clone)]
 pub struct Pulse {
@@ -46,96 +64,6 @@ pub struct Pulse {
     pub is_pulse1: bool,
 }
 
-impl Pulse {
-    fn step_timer(&mut self) {
-        if self.timer_val == 0 {
-            self.timer_val = self.timer_load;
-            self.duty_step = self.duty_step.wrapping_sub(1) & 7;
-        } else {
-            self.timer_val -= 1;
-        }
-    }
-
-    fn clock_envelope(&mut self) {
-        if self.env_start {
-            self.env_start = false;
-            self.env_decay = 15;
-            self.env_divider = self.vol;
-        } else if self.env_divider == 0 {
-            self.env_divider = self.vol;
-            if self.env_decay == 0 {
-                if self.length_halt {
-                    self.env_decay = 15;
-                }
-            } else {
-                self.env_decay -= 1;
-            }
-        } else {
-            self.env_divider -= 1;
-        }
-    }
-
-    fn clock_length(&mut self) {
-        if self.length_counter > 0 && !self.length_halt {
-            self.length_counter -= 1;
-        }
-    }
-
-    fn clock_sweep(&mut self) {
-        let divider_zero = self.sweep_divider == 0;
-
-        if divider_zero && self.sweep_enabled && self.sweep_shift > 0 && !self.is_sweep_muted() {
-            self.timer_load = self.sweep_calc_target();
-        }
-
-        if divider_zero || self.sweep_reload {
-            self.sweep_divider = self.sweep_period;
-            self.sweep_reload = false;
-        } else {
-            self.sweep_divider -= 1;
-        }
-    }
-
-    fn is_sweep_muted(&self) -> bool {
-        self.timer_load < 8 || self.sweep_calc_target() > 0x7FF
-    }
-
-    fn sweep_calc_target(&self) -> u16 {
-        let shift = self.sweep_shift;
-        let change = self.timer_load >> shift;
-        if self.sweep_negate {
-            if self.is_pulse1 {
-                // Pulse 1 uses one's complement: timer_load - change - 1
-                self.timer_load.saturating_sub(change).saturating_sub(1)
-            } else {
-                // Pulse 2 uses two's complement: timer_load - change
-                self.timer_load - change
-            }
-        } else {
-            self.timer_load + change
-        }
-    }
-
-    pub fn volume_output(&self) -> u8 {
-        if !self.enabled
-            || self.length_counter == 0
-            || self.timer_load < 8
-            || (self.sweep_enabled && self.sweep_shift > 0 && self.sweep_calc_target() > 0x7FF)
-        {
-            return 0;
-        }
-        let bit = (DUTY_SEQUENCES[self.duty as usize] >> self.duty_step) & 1;
-        if bit == 0 {
-            return 0;
-        }
-        if self.env_disable {
-            self.vol
-        } else {
-            self.env_decay
-        }
-    }
-}
-
 #[derive(Default, Clone)]
 pub struct Triangle {
     pub enabled: bool,
@@ -148,47 +76,6 @@ pub struct Triangle {
     pub timer_val: u16,
     pub sequencer: u8, // 0..31, generates triangle waveform
     pub linear_reload: bool,
-}
-
-impl Triangle {
-    fn clock_length(&mut self) {
-        if self.length_counter > 0 && !self.length_halt {
-            self.length_counter -= 1;
-        }
-    }
-
-    fn clock_linear_counter(&mut self) {
-        if self.linear_reload {
-            self.linear_counter = self.linear_counter_reload;
-        } else if self.linear_counter > 0 {
-            self.linear_counter -= 1;
-        }
-        if !self.control_flag {
-            self.linear_reload = false;
-        }
-    }
-
-    fn step_timer(&mut self) {
-        if self.timer_val == 0 {
-            self.timer_val = self.timer_load;
-            self.sequencer = self.sequencer.wrapping_add(1) & 31;
-        } else {
-            self.timer_val -= 1;
-        }
-    }
-
-    fn output(&self) -> u8 {
-        if !self.enabled || self.length_counter == 0 || self.linear_counter == 0 {
-            return 0;
-        }
-        // Triangle sequencer: counts up 0..15 then down 15..0
-        // Output is 4-bit (0-15) for the DAC mixer formula
-        if self.sequencer < 16 {
-            self.sequencer
-        } else {
-            31 - self.sequencer
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -228,70 +115,6 @@ impl Default for Noise {
     }
 }
 
-// Noise period table (CPU cycles)
-const NOISE_PERIODS: [u16; 16] = [
-    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
-];
-
-impl Noise {
-    fn clock_length(&mut self) {
-        if self.length_counter > 0 && !self.length_halt {
-            self.length_counter -= 1;
-        }
-    }
-
-    fn clock_envelope(&mut self) {
-        if self.env_start {
-            self.env_start = false;
-            self.env_decay = 15;
-            self.env_divider = self.vol;
-        } else if self.env_divider == 0 {
-            self.env_divider = self.vol;
-            if self.env_decay == 0 {
-                if self.length_halt {
-                    self.env_decay = 15;
-                }
-            } else {
-                self.env_decay -= 1;
-            }
-        } else {
-            self.env_divider -= 1;
-        }
-    }
-
-    fn step_timer(&mut self) {
-        if self.timer_val == 0 {
-            self.timer_val = self.timer_load;
-            // Clock LFSR
-            let feedback = if self.mode {
-                // Mode 1: feedback from bits 0 and 6
-                (self.lfsr ^ (self.lfsr >> 6)) & 1
-            } else {
-                // Mode 0: feedback from bits 0 and 1
-                (self.lfsr ^ (self.lfsr >> 1)) & 1
-            };
-            self.lfsr = (self.lfsr >> 1) | (feedback << 14);
-            // LFSR all-zeros check: if 0, set to 1
-            if self.lfsr == 0 {
-                self.lfsr = 1;
-            }
-        } else {
-            self.timer_val -= 1;
-        }
-    }
-
-    fn output(&self) -> u8 {
-        if !self.enabled || self.length_counter == 0 || (self.lfsr & 1) != 0 {
-            return 0;
-        }
-        if self.env_disable {
-            self.vol
-        } else {
-            self.env_decay
-        }
-    }
-}
-
 #[derive(Default, Clone)]
 pub struct Dmc {
     // Registers
@@ -320,120 +143,6 @@ pub struct Dmc {
 
     // Status
     pub irq: bool,
-}
-
-impl Dmc {
-    fn restart(&mut self) {
-        self.sample_addr = self.sample_addr_load;
-        self.bytes_remaining = self.sample_len;
-        self.buffer_empty = true;
-        self.bits_remaining = 0;
-        self.dma_needed = false;
-        // Reset timer so DMA fires after timer_load CPU cycles
-        // (real NES also has a 2-3 CPU cycle startup delay)
-        self.timer = if self.timer_load == 0 {
-            1
-        } else {
-            self.timer_load
-        };
-    }
-
-    fn step(&mut self) -> bool {
-        // Returns true if this step requires a DMA read (stealing CPU cycles)
-        if self.timer > 0 {
-            self.timer -= 1;
-            return false;
-        }
-
-        // Reload timer (minimum 1 to avoid instant re-fire)
-        self.timer = if self.timer_load == 0 {
-            1
-        } else {
-            self.timer_load
-        };
-
-        if self.buffer_empty {
-            // Need to read a byte into the buffer
-            if self.bytes_remaining > 0 && !self.dma_needed {
-                self.dma_needed = true;
-            }
-            return false;
-        }
-
-        // If buffer is not empty but no bits remain, it's empty
-        if self.bits_remaining == 0 {
-            self.buffer_empty = true;
-            if self.bytes_remaining > 0 {
-                self.dma_needed = true;
-            } else if self.loop_flag {
-                self.restart();
-                self.dma_needed = true;
-            } else if self.irq_enable {
-                self.irq = true;
-            }
-            return false;
-        }
-
-        // Shift out one bit (LSB first)
-        let bit = self.sample_buffer & 1;
-        self.sample_buffer >>= 1;
-        self.bits_remaining -= 1;
-
-        // Adjust output level: +2 for 1, -2 for 0
-        if bit == 1 {
-            if self.output_level <= 125 {
-                self.output_level += 2;
-            }
-        } else if self.output_level >= 2 {
-            self.output_level -= 2;
-        }
-
-        if self.bits_remaining == 0 {
-            self.buffer_empty = true;
-            if self.bytes_remaining > 0 {
-                self.dma_needed = true;
-            } else if self.loop_flag {
-                self.restart();
-                self.dma_needed = true;
-            } else if self.irq_enable {
-                self.irq = true;
-            }
-        }
-
-        false
-    }
-
-    /// Check if DMC DMA needs to read a byte, and return the address to read from.
-    /// Returns None if no DMA is needed.
-    pub fn poll_dma(&self) -> Option<u16> {
-        if self.dma_needed && self.bytes_remaining > 0 {
-            Some(self.sample_addr)
-        } else {
-            None
-        }
-    }
-
-    /// Called when DMC DMA reads a byte from memory
-    fn dma_read(&mut self, val: u8) {
-        self.sample_buffer = val;
-        self.bits_remaining = 8;
-        self.buffer_empty = false;
-        self.dma_needed = false;
-        self.bytes_remaining = self.bytes_remaining.saturating_sub(1);
-        // Advance sample address, wrapping from $FFFF to $8000
-        self.sample_addr = if self.sample_addr == 0xFFFF {
-            0x8000
-        } else {
-            self.sample_addr.wrapping_add(1)
-        };
-    }
-
-    fn output(&self) -> u8 {
-        if !self.enabled {
-            return 0;
-        }
-        self.output_level
-    }
 }
 
 pub struct Apu {
