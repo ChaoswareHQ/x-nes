@@ -55,6 +55,14 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
 
+      - name: Install system deps (for dev-dependencies)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libudev-dev libasound2-dev \
+            libxkbcommon-dev libwayland-dev \
+            libx11-dev libxcursor-dev libxrandr-dev libxi-dev
+
       - name: Run ROM tests with grade output
         run: |
           cargo test --release -- --nocapture 2>&1 | tee test_output.log
