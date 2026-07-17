@@ -42,6 +42,8 @@ pub struct Pulse {
     pub sweep_shift: u8,
     pub sweep_divider: u8,
     pub sweep_reload: bool,
+    /// True for pulse 1 (uses one's complement in negate sweep), false for pulse 2
+    pub is_pulse1: bool,
 }
 
 impl Pulse {
@@ -102,14 +104,23 @@ impl Pulse {
         let shift = self.sweep_shift;
         let change = self.timer_load >> shift;
         if self.sweep_negate {
-            self.timer_load - change
+            if self.is_pulse1 {
+                // Pulse 1 uses one's complement: timer_load - change - 1
+                self.timer_load.saturating_sub(change).saturating_sub(1)
+            } else {
+                // Pulse 2 uses two's complement: timer_load - change
+                self.timer_load - change
+            }
         } else {
             self.timer_load + change
         }
     }
 
     pub fn volume_output(&self) -> u8 {
-        if !self.enabled || self.length_counter == 0 || self.timer_load < 8 || self.is_sweep_muted()
+        if !self.enabled
+            || self.length_counter == 0
+            || self.timer_load < 8
+            || (self.sweep_enabled && self.sweep_shift > 0 && self.sweep_calc_target() > 0x7FF)
         {
             return 0;
         }
@@ -459,7 +470,10 @@ impl Apu {
     pub fn new() -> Self {
         Self {
             cycles: 0,
-            p1: Pulse::default(),
+            p1: Pulse {
+                is_pulse1: true,
+                ..Pulse::default()
+            },
             p2: Pulse::default(),
             triangle: Triangle::default(),
             noise: Noise::default(),
@@ -546,6 +560,7 @@ impl Apu {
         self.p1.clock_envelope();
         self.p2.clock_envelope();
         self.noise.clock_envelope();
+        self.triangle.clock_linear_counter();
     }
 
     fn clock_half_frame(&mut self) {
@@ -555,7 +570,6 @@ impl Apu {
         self.p2.clock_sweep();
         self.triangle.clock_length();
         self.noise.clock_length();
-        self.triangle.clock_linear_counter();
     }
 
     fn clock_frame_counter(&mut self) {
