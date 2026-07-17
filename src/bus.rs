@@ -45,7 +45,7 @@ impl Bus {
         }
     }
 
-    /// Advance PPU to catch up to the current cpu_cycle.
+    /// Advance PPU to catch up to the current `cpu_cycle`.
     /// Each CPU cycle = 3 PPU dots. This only advances the PPU
     /// for cycles that haven't been synced yet.
     #[inline(always)]
@@ -94,11 +94,12 @@ impl Bus {
     /// Sample the NMI latch at the penultimate cycle.
     #[inline(always)]
     fn sample_penultimate(&mut self) {
-        if self.cpu_cycle > 0 && (self.cpu_cycle - 1) == self.penultimate_sample_cycle {
-            if self.ppu.nmi_latched {
-                self.ppu.nmi_latched = false;
-                self.ppu.nmi_deferred_pending = true;
-            }
+        if self.cpu_cycle > 0
+            && (self.cpu_cycle - 1) == self.penultimate_sample_cycle
+            && self.ppu.nmi_latched
+        {
+            self.ppu.nmi_latched = false;
+            self.ppu.nmi_deferred_pending = true;
         }
     }
 

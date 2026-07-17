@@ -24,7 +24,7 @@ pub struct Ppu {
     pub last_bus_value: u8,
     /// PPU cycle counter for open bus decay
     pub tick_count: u64,
-    /// Tick when last_bus_value was last written
+    /// Tick when `last_bus_value` was last written
     pub last_bus_write_tick: u64,
     pub scanline: u16,
     pub cycle: u16,
@@ -34,9 +34,9 @@ pub struct Ppu {
     pub nmi_latched: bool,
     /// Previous NMI output state for edge detection.
     nmi_output: bool,
-    /// Set when NMI is latched by VBlank starting (fires immediately).
+    /// Set when NMI is latched by `VBlank` starting (fires immediately).
     pub nmi_from_vblank: bool,
-    /// Set when penultimate-cycle sample finds nmi_latched (from $2000 write).
+    /// Set when penultimate-cycle sample finds `nmi_latched` (from $2000 write).
     /// This deferred NMI fires at end of the NEXT instruction.
     pub nmi_deferred_pending: bool,
     pub frame_complete: bool,
@@ -66,11 +66,11 @@ pub struct Ppu {
 }
 
 impl Ppu {
-    /// Recompute NMI output (VBlank_active AND NMI_enabled) and
+    /// Recompute NMI output (`VBlank_active` AND `NMI_enabled`) and
     /// detect rising edge (0→1 transition in NMI enable signal),
     /// which corresponds to falling edge on /NMI pin.
-    /// Sets nmi_latched when edge is detected.
-    /// Sets nmi_from_vblank when the edge comes from VBlank starting.
+    /// Sets `nmi_latched` when edge is detected.
+    /// Sets `nmi_from_vblank` when the edge comes from `VBlank` starting.
     #[inline(always)]
     pub fn update_nmi_edge(&mut self, from_vblank: bool) {
         let new_output = (self.status & 0x80 != 0) && (self.ctrl & 0x80 != 0);
