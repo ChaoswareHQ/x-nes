@@ -25,6 +25,9 @@ const SCALE: u32 = 3;
 const DEFAULT_ROM: &str =
     "https://github.com/NovaSquirrel/NovaTheSquirrel/releases/download/v1.0.6a/nova.nes";
 
+// Actual NES frame duration: 89,342 PPU dots / (3 PPU dots per CPU cycle * 1,789,773 Hz)
+const NES_FRAME_NS: u64 = 16_639_000;
+
 static PALETTE: [u32; 64] = [
     0xFF545454, 0xFF001E74, 0xFF080090, 0xFF440088, 0xFF7C005C, 0xFFA4001C, 0xFFA80000, 0xFF880000,
     0xFF5C2800, 0xFF284400, 0xFF005400, 0xFF005030, 0xFF004444, 0xFF000000, 0xFF000000, 0xFF000000,
@@ -98,7 +101,7 @@ impl App {
             ctx: None,
             surface: None,
             frame_timer: Instant::now(),
-            frame_dur: Duration::from_nanos(1_000_000_000 / 60),
+            frame_dur: Duration::from_nanos(NES_FRAME_NS),
             acc: Duration::new(0, 0),
             audio_stream: None,
             audio_tx: None,
@@ -144,13 +147,22 @@ impl ApplicationHandler for App {
                         // Update APU sample rate to match device
                         self.bus.apu.set_sample_rate(sample_rate as f64);
 
-                        let config: cpal::StreamConfig = supported.into();
-                        let rb = HeapRb::<f32>::new(16384);
-                        let (prod, mut cons) = rb.split();
+                        // Use a larger ring buffer to tolerate timing jitter
+                        let rb = HeapRb::<f32>::new(32768);
+                        let (mut prod, mut cons) = rb.split();
                         let ch = channels as usize;
+
+                        // Pre-fill the ring buffer with ~2 frames of silence
+                        // to prevent underruns while the emulator gets going
+                        let frames_to_fill = (sample_rate as f64 / 60.0 * 2.0) as usize;
+                        for _ in 0..frames_to_fill {
+                            let _ = prod.try_push(0.0);
+                        }
+                        eprintln!("Pre-filled buffer with {} samples", frames_to_fill);
 
                         let err_fn = |err| eprintln!("audio stream error: {}", err);
 
+                        let config: cpal::StreamConfig = supported.into();
                         let stream = device.build_output_stream(
                             config,
                             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
@@ -258,10 +270,15 @@ impl ApplicationHandler for App {
             self.bus.ppu.frame_complete = false;
             self.acc -= self.frame_dur;
 
+            // Push audio samples (discard if buffer full — will log occasionally)
             if let Some(tx) = &mut self.audio_tx {
                 let n = self.bus.apu.sample_count;
                 if n > 0 {
-                    let _pushed = tx.push_slice(&self.bus.apu.audio_samples[..n]);
+                    let pushed = tx.push_slice(&self.bus.apu.audio_samples[..n]);
+                    if pushed < n && pushed == 0 {
+                        // Buffer full — samples dropped. This should be rare.
+                        eprintln!("audio buffer full, dropped {} samples", n);
+                    }
                 }
                 self.bus.apu.sample_count = 0;
             }

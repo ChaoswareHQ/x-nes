@@ -209,7 +209,8 @@ impl App {
             ctx: None,
             surface: None,
             frame_timer: Instant::now(),
-            frame_dur: Duration::from_nanos(1_000_000_000 / 60),
+            // Actual NES frame duration (~60.1 fps)
+            frame_dur: Duration::from_nanos(16_639_000),
             acc: Duration::new(0, 0),
             audio_stream: None,
             audio_tx: None,
@@ -251,11 +252,18 @@ impl ApplicationHandler for App {
                     let channels = supported.channels();
                     self.bus.apu.set_sample_rate(sample_rate as f64);
 
-                    let config: cpal::StreamConfig = supported.into();
-                    let rb = HeapRb::<f32>::new(16384);
-                    let (prod, mut cons) = rb.split();
+                    let rb = HeapRb::<f32>::new(32768);
+                    let (mut prod, mut cons) = rb.split();
                     let ch = channels as usize;
 
+                    // Pre-fill buffer with ~2 frames of silence to prevent startup underruns
+                    let frames_to_fill = (sample_rate as f64 / 60.0 * 2.0) as usize;
+                    for _ in 0..frames_to_fill {
+                        let _ = prod.try_push(0.0);
+                    }
+                    eprintln!("Pre-filled buffer with {} samples", frames_to_fill);
+
+                    let config: cpal::StreamConfig = supported.into();
                     if let Ok(stream) = device.build_output_stream(
                         config,
                         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
@@ -375,7 +383,10 @@ impl ApplicationHandler for App {
             if let Some(tx) = &mut self.audio_tx {
                 let n = self.bus.apu.sample_count;
                 if n > 0 {
-                    let _ = tx.push_slice(&self.bus.apu.audio_samples[..n]);
+                    let pushed = tx.push_slice(&self.bus.apu.audio_samples[..n]);
+                    if pushed < n && pushed == 0 {
+                        eprintln!("audio buffer full, dropped {} samples", n);
+                    }
                 }
                 self.bus.apu.sample_count = 0;
             }

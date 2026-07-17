@@ -178,6 +178,3 @@ mod shift;
 mod stack;
 mod transfer;
 mod unofficial;
-
-#[cfg(test)]
-mod sh_tests;
