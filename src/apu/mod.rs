@@ -161,6 +161,8 @@ pub struct Apu {
     pub sample_count: usize,
     sample_timer: f64,
     sample_period: f64,
+    /// Low-pass filter state (emulates NES analog output stage ~14KHz cutoff)
+    filtered_sample: f64,
 
     // Frame counter
     frame_cycles: u32,
@@ -202,6 +204,7 @@ impl Apu {
             sample_count: 0,
             sample_timer: 0.0,
             sample_period: 40.584,
+            filtered_sample: 0.0,
             frame_cycles: 0,
             frame_mode: false,
             interrupt_inhibit: false,
@@ -350,19 +353,18 @@ impl Apu {
                 }
             }
 
-            // DMC step runs every CPU cycle
+            // DMC runs every CPU cycle
             self.dmc.step();
+            // Triangle and Noise timers run at CPU rate (every cycle)
+            self.triangle.step_timer();
+            self.noise.step_timer();
 
-            // APU timers and frame counter are clocked at half the CPU rate.
-            // Use a phase accumulator to carry fractional cycles forward,
-            // avoiding the accumulated drift from odd-length instructions.
+            // Pulse timers and frame counter run at APU rate (every 2 CPU cycles)
             self.apu_phase += 1;
             if self.apu_phase >= 2 {
                 self.apu_phase -= 2;
                 self.p1.step_timer();
                 self.p2.step_timer();
-                self.triangle.step_timer();
-                self.noise.step_timer();
                 self.clock_frame_counter();
             }
 
@@ -370,7 +372,11 @@ impl Apu {
             if self.sample_timer >= self.sample_period {
                 self.sample_timer -= self.sample_period;
                 if self.sample_count < self.audio_samples.len() {
-                    let out = self.mixer_output();
+                    let raw = self.mixer_output() as f64;
+                    // First-order low-pass filter simulating NES analog output
+                    const FILTER_ALPHA: f64 = 0.65;
+                    self.filtered_sample += FILTER_ALPHA * (raw - self.filtered_sample);
+                    let out = self.filtered_sample as f32;
                     self.audio_samples[self.sample_count] = out;
                     self.sample_count += 1;
                 }
@@ -403,14 +409,16 @@ impl Apu {
 
             // NOTE: DMC step is skipped here - ticked via tick_dmc() in bus accesses
 
-            // APU timers and frame counter: per-cycle phase accumulator
+            // Triangle and Noise timers run at CPU rate (every cycle)
+            self.triangle.step_timer();
+            self.noise.step_timer();
+
+            // Pulse timers and frame counter run at APU rate (every 2 CPU cycles)
             self.apu_phase += 1;
             if self.apu_phase >= 2 {
                 self.apu_phase -= 2;
                 self.p1.step_timer();
                 self.p2.step_timer();
-                self.triangle.step_timer();
-                self.noise.step_timer();
                 self.clock_frame_counter();
             }
 
@@ -418,7 +426,10 @@ impl Apu {
             if self.sample_timer >= self.sample_period {
                 self.sample_timer -= self.sample_period;
                 if self.sample_count < self.audio_samples.len() {
-                    let out = self.mixer_output();
+                    let raw = self.mixer_output() as f64;
+                    const FILTER_ALPHA: f64 = 0.65;
+                    self.filtered_sample += FILTER_ALPHA * (raw - self.filtered_sample);
+                    let out = self.filtered_sample as f32;
                     self.audio_samples[self.sample_count] = out;
                     self.sample_count += 1;
                 }
@@ -579,7 +590,9 @@ impl Apu {
                 // Noise mode/period
                 self.noise.mode = val & 0x80 != 0;
                 self.noise.period_index = val & 0x0F;
-                self.noise.timer_load = NOISE_PERIODS[self.noise.period_index as usize];
+                // Period in CPU cycles (timer runs at CPU rate)
+                self.noise.timer_load =
+                    NOISE_PERIODS[self.noise.period_index as usize].saturating_sub(1);
             }
             0x400F => {
                 // Noise length counter
