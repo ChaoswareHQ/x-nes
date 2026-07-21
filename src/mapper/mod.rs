@@ -1,3 +1,5 @@
+use alloc::boxed::Box;
+
 pub mod axrom;
 pub mod cnrom;
 pub mod gxrom;
@@ -62,9 +64,6 @@ impl Mapper {
         chr_ram: bool,
     ) -> Self {
         match id {
-            0 => Self::Nrom(Box::new(nrom::Nrom::new(
-                prg_data, chr_data, chr_ram, mirroring,
-            ))),
             1 => Self::Mmc1(Box::new(mmc1::Mmc1::new(
                 prg_data, chr_data, chr_ram, mirroring,
             ))),

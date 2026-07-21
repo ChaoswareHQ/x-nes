@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use super::MapperImpl;
 
 pub struct Axrom {

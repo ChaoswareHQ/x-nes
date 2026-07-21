@@ -501,6 +501,7 @@ impl Apu {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0x4000 => {

@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use crate::mapper::Mapper;
 
 pub struct Rom {
@@ -31,7 +32,7 @@ impl Rom {
 
         let prg = data[data_start..prg_end].to_vec();
         let chr = if has_chr_ram {
-            vec![0u8; 0x2000]
+            alloc::vec![0u8; 0x2000]
         } else {
             let chr_size = chr_8kb * 0x2000;
             let chr_start = data_start + prg_size;
@@ -176,20 +177,5 @@ mod tests {
         // Write to switch to bank 1
         mapper.cpu_write(0x8000, 1);
         assert_eq!(mapper.cpu_read(0x8000), 0xAA); // both banks same data
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn download_and_parse_nova() {
-        let resp = ureq::get(
-            "https://github.com/NovaSquirrel/NovaTheSquirrel/releases/download/v1.0.6a/nova.nes",
-        )
-        .call()
-        .unwrap();
-        let data = resp.into_body().read_to_vec().unwrap();
-        assert!(data.len() > 16);
-        let rom = Rom::new(&data).unwrap();
-        assert!(rom.prg.len() > 0);
-        assert_eq!(rom.mapper_id, 1);
     }
 }

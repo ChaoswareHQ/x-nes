@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use super::MapperImpl;
 
 pub struct Gxrom {
@@ -13,7 +14,7 @@ impl Gxrom {
     pub fn new(prg: &[u8], chr: &[u8], chr_ram: bool, mirror: u8) -> Self {
         Self {
             prg: prg.to_vec(),
-            chr: if chr_ram { vec![0u8; 0x2000] } else { chr.to_vec() },
+            chr: if chr_ram { alloc::vec![0u8; 0x2000] } else { chr.to_vec() },
             chr_ram,
             mirror,
             prg_bank: 0,

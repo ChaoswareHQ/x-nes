@@ -12,6 +12,12 @@ pub struct Gamepad {
     buttons: [u8; 2],
 }
 
+impl Default for Gamepad {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Gamepad {
     pub fn new() -> Self {
         Self {

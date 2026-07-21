@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use super::MapperImpl;
 
 pub struct Cnrom {
@@ -13,7 +14,7 @@ impl Cnrom {
         Self {
             prg: prg.to_vec(),
             chr: if chr_ram {
-                vec![0u8; 0x2000]
+                alloc::vec![0u8; 0x2000]
             } else {
                 chr.to_vec()
             },

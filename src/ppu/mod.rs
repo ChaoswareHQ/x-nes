@@ -15,65 +15,47 @@ const VISIBLE_SCANLINES: u16 = 240;
 const VBLANK_START: u16 = 241;
 const PRERENDER_SCANLINE: u16 = 261;
 
-#[allow(dead_code)]
 pub struct Ppu {
     pub vram: [u8; 0x1000],
     pub palette: [u8; 0x20],
     pub oam: [u8; 0x100],
-
     pub ctrl: u8,
     pub mask: u8,
     pub status: u8,
     pub oam_addr: u8,
-
     pub v: u16,
     pub t: u16,
     pub fine_x: u8,
     pub w: u8,
-
     pub data_buffer: u8,
     pub last_bus_value: u8,
-    /// PPU cycle counter for open bus decay
     pub tick_count: u64,
-    /// Tick when `last_bus_value` was last written
     pub last_bus_write_tick: u64,
     pub scanline: u16,
     pub cycle: u16,
-    /// NMI edge-detect latch: set when the PPU's NMI output transitions
-    /// from high (1) to low (0). The CPU samples this latch on the
-    /// penultimate cycle of each instruction.
     pub nmi_latched: bool,
-    /// Previous NMI output state for edge detection.
     nmi_output: bool,
-    /// Set when NMI is latched by `VBlank` starting (fires immediately).
     pub nmi_from_vblank: bool,
-    /// Set when penultimate-cycle sample finds `nmi_latched` (from $2000 write).
-    /// This deferred NMI fires at end of the NEXT instruction.
     pub nmi_deferred_pending: bool,
     pub frame_complete: bool,
     pub frame: [u8; 61440],
     odd_frame: bool,
-
-    // Sprite rendering state
     sprite_count: u8,
     sprite_indices: [u8; 8],
     sprite_zero_hit_possible: bool,
-
-    // Background shift registers
     bg_shift_low: u16,
     bg_shift_high: u16,
     bg_attr_shift_low: u16,
     bg_attr_shift_high: u16,
-
-    // VBL suppression
     vbl_suppressed: bool,
-
-    // Snapshot of v register at start of scanline (for stable scroll)
     render_v: u16,
-    // Snapshot of fine_x at sync points (cycle 0 of prerender, cycle 257)
     render_fine_x: u8,
-    // Whether rendering was enabled when the current frame started (for odd frame skip)
-    frame_rendering_enabled: bool,
+}
+
+impl Default for Ppu {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Ppu {
@@ -113,7 +95,6 @@ impl Ppu {
             vbl_suppressed: false,
             render_v: 0,
             render_fine_x: 0,
-            frame_rendering_enabled: false,
         }
     }
 
@@ -164,6 +145,7 @@ impl Ppu {
     }
 
     // ---- Main cycle-accurate tick ----
+    #[allow(clippy::too_many_lines)]
     pub fn tick(&mut self, mapper: &mut Mapper) {
         self.tick_count += 1;
         let sl = self.scanline;
@@ -239,7 +221,7 @@ impl Ppu {
 
         // ===== Cycles 1-256: Visible rendering on visible/prerender scanlines =====
         if self.rendering_or_prerender() {
-            if cy >= 1 && cy <= 256 {
+            if (1..=256).contains(&cy) {
                 // Fetch next tile every 8 cycles (shift register pipeline)
                 if self.rendering_enabled() && (cy & 7) == 1 {
                     self.fetch_bg_tile(mapper);

@@ -91,7 +91,6 @@ impl Bus {
         }
     }
 
-    /// Sample the NMI latch at the penultimate cycle.
     #[inline(always)]
     fn sample_penultimate(&mut self) {
         if self.cpu_cycle > 0
@@ -103,8 +102,6 @@ impl Bus {
         }
     }
 
-    /// Advance one CPU cycle, catching up the PPU by 3 dots.
-    /// Call for internal cycles (no bus access).
     #[inline(always)]
     pub fn advance_cycle(&mut self) {
         self.cpu_cycle += 1;
@@ -118,14 +115,13 @@ impl Bus {
         self.sample_penultimate();
         self.catch_up_ppu();
         let val = self.read_mapped(addr);
-        // Update open bus tracking
         let top = (addr >> 12) as u8;
         let is_open_bus = match addr {
             0x4015 => true,
             0x4016 => false,
             _ if top == 4 && addr < 0x4018 => true,
-            _ if top == 4 && addr >= 0x4018 && addr < 0x4020 => true,
-            _ if top == 4 && addr >= 0x4020 && addr < 0x6000 => true,
+            _ if top == 4 && (0x4018..0x4020).contains(&addr) => true,
+            _ if top == 4 && (0x4020..0x6000).contains(&addr) => true,
             _ if addr < 0x4000 => false,
             _ if addr >= 0x6000 => false,
             _ => true,
