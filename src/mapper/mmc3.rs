@@ -24,8 +24,6 @@ pub struct Mmc3 {
     prg_ram_enable: bool,
     prg_ram_write: bool,
     has_chr_ram: bool,
-    // A12 tracking for M2 edge detection
-    prev_a12: bool,
 }
 
 impl Mmc3 {
@@ -51,7 +49,6 @@ impl Mmc3 {
             prg_ram_enable: false,
             prg_ram_write: false,
             has_chr_ram: chr_ram,
-            prev_a12: false,
         }
     }
 
@@ -87,18 +84,20 @@ impl MapperImpl for Mmc3 {
             }
             0x8000..=0x9FFF => {
                 // 8KB switchable or fixed (controlled by bank_select bit 6)
+                // Real MMC3: bit 6=0 => $8000 = R6 (switchable), $C000 = fixed-2
+                //            bit 6=1 => $8000 = fixed-2, $C000 = R6 (switchable)
                 let bank = if self.bank_select & 0x40 != 0 {
-                    // $8000 swappable
-                    self.prg_banks[2] as usize
-                } else {
-                    // $8000 fixed to second-to-last bank
+                    // $8000 fixed to second-to-last bank (swapped mode)
                     (self.prg_bank_count() - 2) as usize
+                } else {
+                    // $8000 = R6 (default: switchable)
+                    self.prg_banks[2] as usize
                 };
                 let off = (addr & 0x1FFF) as usize;
                 self.prg[(bank * 0x2000 + off) % self.prg.len()]
             }
             0xA000..=0xBFFF => {
-                // 8KB switchable or fixed
+                // Always R7 (switchable)
                 let bank = self.prg_banks[3] as usize;
                 let off = (addr & 0x1FFF) as usize;
                 self.prg[(bank * 0x2000 + off) % self.prg.len()]
@@ -106,12 +105,13 @@ impl MapperImpl for Mmc3 {
             0xC000..=0xDFFF => {
                 // 8KB switchable or fixed
                 if self.bank_select & 0x40 != 0 {
-                    // $C000 fixed
-                    let bank = (self.prg_bank_count() - 2) as usize;
+                    // $C000 = R6 (swapped mode: switchable)
+                    let bank = self.prg_banks[2] as usize;
                     let off = (addr & 0x1FFF) as usize;
                     self.prg[(bank * 0x2000 + off) % self.prg.len()]
                 } else {
-                    let bank = self.prg_banks[2] as usize;
+                    // $C000 fixed to second-to-last bank (default mode)
+                    let bank = (self.prg_bank_count() - 2) as usize;
                     let off = (addr & 0x1FFF) as usize;
                     self.prg[(bank * 0x2000 + off) % self.prg.len()]
                 }
@@ -151,8 +151,8 @@ impl MapperImpl for Mmc3 {
                         4 => self.chr_banks[4] = bank,
                         5 => self.chr_banks[5] = bank,
                         6 => {
-                            let idx = if self.bank_select & 0x40 != 0 { 2 } else { 3 };
-                            self.prg_banks[idx] = bank & 0x3F;
+                            // R6: switchable PRG bank slot (at $8000 or $C000 depending on mode)
+                            self.prg_banks[2] = bank & 0x3F;
                         }
                         7 => {
                             self.prg_banks[3] = bank & 0x3F;
@@ -164,8 +164,9 @@ impl MapperImpl for Mmc3 {
             0xA000..=0xBFFF => {
                 if addr & 1 == 0 {
                     // $A000: Mirroring
-                    let v = u8::from(val & 1 != 0);
-                    self.mirror = v; // vertical/horizontal
+                    // MMC3: bit 0 = 0 → vertical, bit 0 = 1 → horizontal
+                    // nt_index: mirror 0 = horizontal, mirror 1 = vertical
+                    self.mirror = u8::from(val & 1 == 0); // invert to match nt_index
                 } else {
                     // $A001: PRG RAM protect
                     self.prg_ram_enable = val & 0x80 != 0;
@@ -177,9 +178,8 @@ impl MapperImpl for Mmc3 {
                     // $C000: IRQ latch
                     self.irq_latch = val;
                 } else {
-                    // $C001: IRQ reload (counter set to 0, triggers reload on next A12 edge)
+                    // $C001: IRQ reload (reloads latch on next A12 edge)
                     // Also acknowledges any pending IRQ (real MMC3 behavior)
-                    self.irq_counter = 0;
                     self.irq_flag = false;
                     self.irq_reload = true;
                 }
@@ -189,12 +189,8 @@ impl MapperImpl for Mmc3 {
                     // $E000: IRQ acknowledge (clears flag, does NOT disable)
                     self.irq_flag = false;
                 } else {
-                    // $E001: IRQ enable
+                    // $E001: IRQ enable (reload happens on next A12 edge)
                     self.irq_enabled = true;
-                    if self.irq_reload {
-                        self.irq_counter = self.irq_latch;
-                        self.irq_reload = false;
-                    }
                 }
             }
             _ => {}
@@ -300,23 +296,21 @@ impl MapperImpl for Mmc3 {
     }
 
     fn clock_scanline(&mut self) {
-        if self.irq_reload {
-            // Reload from latch (first A12 edge after $C001 write)
+        // Real MMC3 behavior (from SJNES reference):
+        //   - If counter is 0 or reload is pending: reload from latch
+        //   - Otherwise: decrement counter
+        //   - If counter (new value) is 0 and IRQ enabled: fire IRQ
+        // The counter auto-reloads when reaching 0, so IRQ fires
+        // repeatedly every N A12 edges until acknowledged.
+        if self.irq_counter == 0 || self.irq_reload {
             self.irq_counter = self.irq_latch;
             self.irq_reload = false;
-            // If latch is 0, IRQ fires immediately
-            if self.irq_counter == 0 && self.irq_enabled {
-                self.irq_flag = true;
-            }
-        } else if self.irq_counter > 0 {
+        } else {
             self.irq_counter -= 1;
-            if self.irq_counter == 0 && self.irq_enabled {
-                // IRQ fires when counter reaches 0
-                self.irq_flag = true;
-            }
         }
-        // On real MMC3, counter stays at 0 and continues firing IRQ
-        // until acknowledged via $E000 write
+        if self.irq_counter == 0 && self.irq_enabled {
+            self.irq_flag = true;
+        }
     }
 
     fn has_chr_ram(&self) -> bool {

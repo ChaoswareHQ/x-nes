@@ -106,6 +106,10 @@ pub struct Ppu {
     // Stable scroll snapshots (used by on-the-fly renderer)
     render_v: u16,
     render_fine_x: u8,
+
+    // A12 edge tracking for mapper scanline counters (MMC3)
+    prev_a12: bool,
+    a12_low_cycles: u8,
 }
 
 impl Default for Ppu {
@@ -147,6 +151,8 @@ impl Ppu {
             vbl_suppressed: false,
             render_v: 0,
             render_fine_x: 0,
+            prev_a12: false,
+            a12_low_cycles: 0,
         }
     }
 
@@ -311,7 +317,8 @@ impl Ppu {
     }
 
     /// Cycle 257: copy horizontal scroll bits, evaluate sprites for next line.
-    fn cycle257_copy_and_eval(&mut self) {
+    /// Also generates A12 edges for sprite pattern fetches (MMC3 IRQ timing).
+    fn cycle257_copy_and_eval(&mut self, mapper: &mut Mapper) {
         if self.rendering_enabled() {
             self.copy_horizontal();
             // Update render_v with horizontal bits only.
@@ -326,7 +333,40 @@ impl Ppu {
         } else {
             self.scanline + 1
         };
-        self.evaluate_sprites_for(next_sl);
+        self.evaluate_sprites_for(next_sl, mapper);
+    }
+
+    // -----------------------------------------------------------------------
+    // Mapper CHR read with A12 edge detection (for MMC3 scanline IRQ, etc.)
+    // -----------------------------------------------------------------------
+
+    /// Notify the PPU that address `addr` is on the address bus (for A12 tracking).
+    /// MMC3 counts A12 rising edges to clock its scanline counter.
+    ///
+    /// Note: The real MMC3 requires A12 low for >= 3 PPU cycles before a rising
+    /// edge counts. However, the x-nes on-the-fly renderer executes tile fetches
+    /// (NT read, AT read, pattern reads) synchronously within a single `tick()`, so
+    /// the cycle counter cannot accumulate between the forced A12-low
+    /// (`notify_mapper_a12(0x0000)`) and the pattern read. We omit the timing guard
+    /// here (matching SJNES behavior) since our simulated bus has no noise that
+    /// could generate false edges.
+    fn notify_mapper_a12(&mut self, addr: u16, mapper: &mut Mapper) {
+        let a12_new = (addr & 0x1000) != 0;
+        if a12_new && !self.prev_a12 {
+            // Rising edge on A12
+            mapper.clock_scanline();
+            self.a12_low_cycles = 0;
+        } else if !a12_new && self.prev_a12 {
+            // Falling edge on A12
+            self.a12_low_cycles = 0;
+        }
+        self.prev_a12 = a12_new;
+    }
+
+    /// Read from CHR space through the mapper with A12 edge tracking.
+    pub fn chr_read(&mut self, addr: u16, mapper: &mut Mapper) -> u8 {
+        self.notify_mapper_a12(addr, mapper);
+        mapper.ppu_read(addr)
     }
 
     // ===================================================================
@@ -335,6 +375,12 @@ impl Ppu {
 
     pub fn tick(&mut self, mapper: &mut Mapper) {
         self.tick_count += 1;
+
+        // Increment A12 low-cycle counter (for MMC3 scanline IRQ)
+        if !self.prev_a12 && self.a12_low_cycles < 255 {
+            self.a12_low_cycles += 1;
+        }
+
         let cy = self.cycle;
         let sl = self.scanline;
 
@@ -366,7 +412,7 @@ impl Ppu {
             }
             // --- Phase 5: Cycle 257 — horizontal copy + sprite evaluation ---
             if cy == HORIZONTAL_COPY_CYCLE {
-                self.cycle257_copy_and_eval();
+                self.cycle257_copy_and_eval(mapper);
             }
         }
     }

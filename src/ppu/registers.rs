@@ -23,7 +23,7 @@ impl Ppu {
     pub fn read_data(&mut self, mapper: &mut Mapper) -> u8 {
         let addr = self.v & 0x3FFF;
         let val = if addr < 0x2000 {
-            mapper.ppu_read(addr)
+            self.chr_read(addr, mapper)
         } else {
             self.ppu_read_nt(addr, mapper.mirroring())
         };

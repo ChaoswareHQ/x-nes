@@ -114,6 +114,12 @@ impl Ppu {
                 };
                 bank | (tile << 4) | pixel_y as u16
             };
+            // Use mapper.ppu_read directly (no A12 tracking) for on-the-fly
+            // sprite pixel rendering. In the real NES, sprite pattern data
+            // is fetched during cycles 257-320 of the previous scanline and
+            // the A12 edges from those fetches are generated in
+            // evaluate_sprites_for. Re-reading here for pixel output is a
+            // software optimization that must not affect MMC3 IRQ timing.
             let low = mapper.ppu_read(tile_addr);
             let high = mapper.ppu_read(tile_addr | 8);
             let shift = 7 - pixel_x;
@@ -155,12 +161,13 @@ impl Ppu {
         self.frame[(y as usize) * 256 + (x as usize)] = colour;
     }
 
-    pub(super) fn evaluate_sprites_for(&mut self, sl: u16) {
+    pub(super) fn evaluate_sprites_for(&mut self, sl: u16, mapper: &mut Mapper) {
         self.sprite_count = 0;
         if self.mask & 0x10 == 0 {
             return;
         }
         let sprite_h = if self.ctrl & 0x20 != 0 { 16 } else { 8 };
+        let use_16 = self.ctrl & 0x20 != 0;
         for i in (0..0x100).step_by(4) {
             let sy = self.oam[i] as u16;
             if sy <= sl && sl < sy + sprite_h {
@@ -172,23 +179,63 @@ impl Ppu {
                 }
             }
         }
+
+        // Generate A12 edges for sprite pattern fetches (real NES PPU does
+        // these during cycles 257-320 of the previous scanline). Each visible
+        // sprite generates 2 CHR reads (pattern low + pattern high) which
+        // clock the MMC3 scanline counter via A12 rising edges.
+        // We read through chr_read() here so that notify_mapper_a12 tracks
+        // A12 state properly for the MMC3 IRQ.
+        for si in 0..self.sprite_count.min(8) {
+            let idx = self.sprite_indices[si as usize] as usize;
+            let oi = idx * 4;
+            let tile = self.oam[oi + 1] as u16;
+            let attr = self.oam[oi + 2];
+            let flip_y = attr & 0x80 != 0;
+            let pixel_y = if flip_y {
+                (sprite_h as u8).wrapping_sub(1)
+            } else {
+                0
+            };
+            let tile_addr = if use_16 {
+                let bank = if tile & 1 != 0 { 0x1000 } else { 0x0000 };
+                let base_tile = tile & 0xFE;
+                bank | (base_tile << 4) | pixel_y as u16
+            } else {
+                let bank = if self.ctrl & 0x08 != 0 {
+                    0x1000
+                } else {
+                    0x0000
+                };
+                bank | (tile << 4) | pixel_y as u16
+            };
+            // Simulate A12-low nametable address access between sprite pattern
+            // fetches (real PPU interleaves NT/AT reads with pattern reads).
+            self.notify_mapper_a12(0x0000, mapper);
+            self.chr_read(tile_addr, mapper);
+            self.notify_mapper_a12(0x0000, mapper);
+            self.chr_read(tile_addr | 8, mapper);
+        }
     }
 
     /// Fetch next background tile pattern from VRAM.
     /// This triggers mapper CHR reads (needed for MMC3 IRQ timing).
-    pub(super) fn fetch_bg_tile(&self, mapper: &mut Mapper) {
+    pub(super) fn fetch_bg_tile(&mut self, mapper: &mut Mapper) {
+        // Notify A12 low before nametable read (simulates address bus transistion
+        // from CHR $0000 region, needed for MMC3 scanline counter rising edges
+        // when subsequent pattern reads are at $1000+)
+        self.notify_mapper_a12(0x0000, mapper);
+
         let tile_x = self.v & 0x001F;
         let tile_y = (self.v >> 5) & 0x001F;
         let fine_y = (self.v >> 12) & 0x0007;
         let nt = (self.v >> 10) & 0x0003;
-        // Discard fetched data — pixel rendering uses on-the-fly compute_bg_pixel
-        // which reads directly from VRAM via the mapper.
         self.fetch_tile_pattern(tile_x, tile_y, fine_y, nt, mapper);
     }
 
     #[allow(clippy::too_many_arguments)]
     fn fetch_tile_pattern(
-        &self,
+        &mut self,
         tile_x: u16,
         tile_y: u16,
         fine_y: u16,
@@ -210,8 +257,8 @@ impl Ppu {
             0x0000
         };
         let tile_addr = bg_table | ((nt_byte as u16) << 4) | fine_y;
-        let pat_low = mapper.ppu_read(tile_addr);
-        let pat_high = mapper.ppu_read(tile_addr | 0x0008);
+        let pat_low = self.chr_read(tile_addr, mapper);
+        let pat_high = self.chr_read(tile_addr | 0x0008, mapper);
         (nt_byte, attr_bits, pat_low, pat_high)
     }
 }
