@@ -1,7 +1,7 @@
 [package]
 name = "x-nes"
 authors = ["Nguyễn Quý Ngọc"]
-version = "0.1.1"
+version = "0.1.3"
 edition = "2024"
 rust-version = "1.97.0"
 repository = "https://github.com/ChaoswareHQ/x-nes"
@@ -30,11 +30,6 @@ features = ["ffi", "save_states", "rewind"]
 [features]
 default = ["std"]
 std = []
-decompiler = []
-save_states = []
-retroarch = []
-rewind = []
-ffi = []
 
 [lib]
 name = "nes"
@@ -47,14 +42,6 @@ path = "examples/main.rs"
 [[example]]
 name = "window"
 path = "examples/window.rs"
-
-[[example]]
-name = "netplay"
-path = "examples/netplay.rs"
-
-[[example]]
-name = "dual"
-path = "examples/dual.rs"
 
 [dev-dependencies]
 softbuffer = "0.4.8"
