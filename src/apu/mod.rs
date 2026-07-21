@@ -390,7 +390,9 @@ impl Apu {
         }
     }
 
-    pub fn tick(&mut self, cpu_cycles: u16) {
+    /// Common inner loop for both `tick` and `tick_without_dmc`.
+    /// `dmc_enabled` controls whether `self.dmc.step()` is called.
+    fn tick_inner(&mut self, cpu_cycles: u16, dmc_enabled: bool) {
         for _ in 0..cpu_cycles {
             self.cycles += 1;
 
@@ -398,7 +400,6 @@ impl Apu {
             if self.fc_delay > 0 {
                 self.fc_delay -= 1;
                 if self.fc_delay == 0 && self.fc_write_pending {
-                    // Apply the delayed $4017 write
                     self.frame_mode = self.fc_pending_mode;
                     self.interrupt_inhibit = self.fc_pending_inhibit;
                     if self.interrupt_inhibit {
@@ -413,8 +414,10 @@ impl Apu {
                 }
             }
 
-            // DMC runs every CPU cycle
-            self.dmc.step();
+            if dmc_enabled {
+                self.dmc.step();
+            }
+
             // Triangle and Noise timers run at CPU rate (every cycle)
             self.triangle.step_timer();
             self.noise.step_timer();
@@ -433,7 +436,6 @@ impl Apu {
                 self.sample_timer -= self.sample_period;
                 if self.sample_count < self.audio_samples.len() {
                     let raw = self.mixer_output();
-                    // First-order low-pass filter: filtered += ALPHA * (raw - filtered)
                     let diff = raw as i64 - self.filtered_sample as i64;
                     let delta = (diff * FILTER_ALPHA as i64) >> 16;
                     self.filtered_sample = (self.filtered_sample as i64 + delta) as i32;
@@ -444,58 +446,13 @@ impl Apu {
         }
     }
 
+    pub fn tick(&mut self, cpu_cycles: u16) {
+        self.tick_inner(cpu_cycles, true);
+    }
+
     /// Tick all APU components except DMC (DMC is ticked per bus access).
     pub fn tick_without_dmc(&mut self, cpu_cycles: u16) {
-        for _ in 0..cpu_cycles {
-            self.cycles += 1;
-
-            // Handle $4017 write delay
-            if self.fc_delay > 0 {
-                self.fc_delay -= 1;
-                if self.fc_delay == 0 && self.fc_write_pending {
-                    self.frame_mode = self.fc_pending_mode;
-                    self.interrupt_inhibit = self.fc_pending_inhibit;
-                    if self.interrupt_inhibit {
-                        self.frame_irq = false;
-                    }
-                    self.frame_cycles = 0;
-                    if self.frame_mode {
-                        self.clock_quarter_frame();
-                        self.clock_half_frame();
-                    }
-                    self.fc_write_pending = false;
-                }
-            }
-
-            // NOTE: DMC step is skipped here - ticked via tick_dmc() in bus accesses
-
-            // Triangle and Noise timers run at CPU rate (every cycle)
-            self.triangle.step_timer();
-            self.noise.step_timer();
-
-            // Pulse timers and frame counter run at APU rate (every 2 CPU cycles)
-            self.phase += 1;
-            if self.phase >= 2 {
-                self.phase -= 2;
-                self.p1.step_timer();
-                self.p2.step_timer();
-                self.clock_frame_counter();
-            }
-
-            self.sample_timer = self.sample_timer.wrapping_add(ONE_Q16);
-            if self.sample_timer >= self.sample_period {
-                self.sample_timer -= self.sample_period;
-                if self.sample_count < self.audio_samples.len() {
-                    let raw = self.mixer_output();
-                    // First-order low-pass filter: filtered += ALPHA * (raw - filtered)
-                    let diff = raw as i64 - self.filtered_sample as i64;
-                    let delta = (diff * FILTER_ALPHA as i64) >> 16;
-                    self.filtered_sample = (self.filtered_sample as i64 + delta) as i32;
-                    self.audio_samples[self.sample_count] = (self.filtered_sample >> 1) as i16;
-                    self.sample_count += 1;
-                }
-            }
-        }
+        self.tick_inner(cpu_cycles, false);
     }
 
     fn mixer_output(&self) -> i32 {

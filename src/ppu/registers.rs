@@ -3,26 +3,6 @@ use crate::mapper::Mapper;
 use super::{Ppu, VBLANK_START};
 
 impl Ppu {
-    /// Recompute NMI output (`VBlank_active` AND `NMI_enabled`) and
-    /// detect rising edge (0→1 transition in NMI enable signal),
-    /// which corresponds to falling edge on /NMI pin.
-    /// Sets `nmi_latched` when edge is detected.
-    /// Sets `nmi_from_vblank` when the edge comes from `VBlank` starting.
-    #[inline(always)]
-    pub fn update_nmi_edge(&mut self, from_vblank: bool) {
-        let new_output = (self.status & 0x80 != 0) && (self.ctrl & 0x80 != 0);
-        let was_active = self.nmi_output;
-        // Rising edge on enable signal = falling edge on /NMI
-        let edge = !was_active && new_output;
-        if edge {
-            self.nmi_latched = true;
-            if from_vblank {
-                self.nmi_from_vblank = true;
-            }
-        }
-        self.nmi_output = new_output;
-    }
-
     pub fn read_status(&mut self) -> u8 {
         let s = self.status;
         self.status &= !0x80;
