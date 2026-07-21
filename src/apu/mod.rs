@@ -29,6 +29,63 @@ const DMC_RATES: [u16; 16] = [
 // Duty 3: 0b11001111 -> 1,0,0,1,1,1,1,1  (25% negated)
 const DUTY_SEQUENCES: [u8; 4] = [0x02, 0x06, 0x1E, 0xCF];
 
+// ---- Fixed-point audio constants (Q16.16 format) ----
+/// Precomputed NES DAC pulse output (Q16.16, indexed by `pulse_sum` 0..30).
+/// `pulse_part_q16` = (9588 * s * 65536) / (812800 + 10000 * s)
+const PULSE_TABLE: [i32; 31] = {
+    let mut t = [0i32; 31];
+    let mut s = 0usize;
+    while s < 31 {
+        let num = (9588 * s) as i64;
+        let den = (812_800 + 10_000 * s) as i64;
+        t[s] = ((num * 65536) / den) as i32;
+        s += 1;
+    }
+    t
+};
+
+/// Triangle contribution to TND sum (Q16.16).
+const TRI_TABLE: [i32; 16] = {
+    let mut t = [0i32; 16];
+    let mut i = 0usize;
+    while i < 16 {
+        t[i] = ((i as i64 * 65536) / 8227) as i32;
+        i += 1;
+    }
+    t
+};
+
+/// Noise contribution to TND sum (Q16.16).
+const NOI_TABLE: [i32; 16] = {
+    let mut t = [0i32; 16];
+    let mut i = 0usize;
+    while i < 16 {
+        t[i] = ((i as i64 * 65536) / 12241) as i32;
+        i += 1;
+    }
+    t
+};
+
+/// DMC contribution to TND sum (Q16.16).
+const DMC_TABLE: [i32; 128] = {
+    let mut t = [0i32; 128];
+    let mut i = 0usize;
+    while i < 128 {
+        t[i] = ((i as i64 * 65536) / 22638) as i32;
+        i += 1;
+    }
+    t
+};
+
+/// Low-pass filter coefficient in Q16.16 (0.65 * 65536).
+const FILTER_ALPHA: i32 = 42598;
+
+/// Q16.16 representation of 1.0.
+const ONE_Q16: u32 = 65536;
+
+/// NES CPU clock rate.
+const CPU_HZ: u64 = 1_789_773;
+
 // Noise period table (CPU cycles)
 const NOISE_PERIODS: [u16; 16] = [
     4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
@@ -157,12 +214,15 @@ pub struct Apu {
     triangle: Triangle,
     noise: Noise,
     dmc: Dmc,
-    pub audio_samples: [f32; 4096],
+    pub audio_samples: [i16; 4096],
     pub sample_count: usize,
-    sample_timer: f64,
-    sample_period: f64,
-    /// Low-pass filter state (emulates NES analog output stage ~14KHz cutoff)
-    filtered_sample: f64,
+    /// Sample timing accumulator (Q16.16 fixed-point).
+    /// Incremented by `ONE_Q16` per CPU cycle. Sample captured when >= `sample_period`.
+    sample_timer: u32,
+    /// Sample period in Q16.16 fixed-point.
+    sample_period: u32,
+    /// Low-pass filter state in Q16.16 fixed-point (emulates ~14KHz cutoff).
+    filtered_sample: i32,
 
     // Frame counter
     frame_cycles: u32,
@@ -200,11 +260,11 @@ impl Apu {
                 timer_load: DMC_RATES[0],
                 ..Dmc::default()
             },
-            audio_samples: [0.0; 4096],
+            audio_samples: [0; 4096],
             sample_count: 0,
-            sample_timer: 0.0,
-            sample_period: 40.584,
-            filtered_sample: 0.0,
+            sample_timer: 0,
+            sample_period: (((CPU_HZ) << 16) / 44100) as u32,
+            filtered_sample: 0,
             frame_cycles: 0,
             frame_mode: false,
             interrupt_inhibit: false,
@@ -216,8 +276,8 @@ impl Apu {
         }
     }
 
-    pub fn set_sample_rate(&mut self, rate: f64) {
-        self.sample_period = 1_789_773.0 / rate;
+    pub fn set_sample_rate(&mut self, rate: u32) {
+        self.sample_period = (((CPU_HZ) << 16) / rate as u64) as u32;
     }
 
     pub fn dmc_dma_pending(&self) -> bool {
@@ -368,16 +428,16 @@ impl Apu {
                 self.clock_frame_counter();
             }
 
-            self.sample_timer += 1.0;
+            self.sample_timer = self.sample_timer.wrapping_add(ONE_Q16);
             if self.sample_timer >= self.sample_period {
                 self.sample_timer -= self.sample_period;
                 if self.sample_count < self.audio_samples.len() {
-                    let raw = self.mixer_output() as f64;
-                    // First-order low-pass filter simulating NES analog output
-                    const FILTER_ALPHA: f64 = 0.65;
-                    self.filtered_sample = FILTER_ALPHA.mul_add(raw - self.filtered_sample, self.filtered_sample);
-                    let out = self.filtered_sample as f32;
-                    self.audio_samples[self.sample_count] = out;
+                    let raw = self.mixer_output();
+                    // First-order low-pass filter: filtered += ALPHA * (raw - filtered)
+                    let diff = raw as i64 - self.filtered_sample as i64;
+                    let delta = (diff * FILTER_ALPHA as i64) >> 16;
+                    self.filtered_sample = (self.filtered_sample as i64 + delta) as i32;
+                    self.audio_samples[self.sample_count] = (self.filtered_sample >> 1) as i16;
                     self.sample_count += 1;
                 }
             }
@@ -422,49 +482,43 @@ impl Apu {
                 self.clock_frame_counter();
             }
 
-            self.sample_timer += 1.0;
+            self.sample_timer = self.sample_timer.wrapping_add(ONE_Q16);
             if self.sample_timer >= self.sample_period {
                 self.sample_timer -= self.sample_period;
                 if self.sample_count < self.audio_samples.len() {
-                    let raw = self.mixer_output() as f64;
-                    const FILTER_ALPHA: f64 = 0.65;
-                    self.filtered_sample = FILTER_ALPHA.mul_add(raw - self.filtered_sample, self.filtered_sample);
-                    let out = self.filtered_sample as f32;
-                    self.audio_samples[self.sample_count] = out;
+                    let raw = self.mixer_output();
+                    // First-order low-pass filter: filtered += ALPHA * (raw - filtered)
+                    let diff = raw as i64 - self.filtered_sample as i64;
+                    let delta = (diff * FILTER_ALPHA as i64) >> 16;
+                    self.filtered_sample = (self.filtered_sample as i64 + delta) as i32;
+                    self.audio_samples[self.sample_count] = (self.filtered_sample >> 1) as i16;
                     self.sample_count += 1;
                 }
             }
         }
     }
 
-    fn mixer_output(&self) -> f32 {
-        let pulse1 = self.p1.volume_output() as f32;
-        let pulse2 = self.p2.volume_output() as f32;
-        let triangle_out = self.triangle.output() as f32;
-        let noise_out = self.noise.output() as f32;
-        let dmc_out = self.dmc.output() as f32;
-        let pulse_sum = pulse1 + pulse2;
-        // Non-linear NES DAC formula from NESDev wiki
-        // Each TND channel has a different impedance:
-        //   Triangle: 8227 ohm, Noise: 12241 ohm, DMC: 22638 ohm
-        let pulse_part = if pulse_sum == 0.0 {
-            0.0
+    fn mixer_output(&self) -> i32 {
+        let pulse_sum = (self.p1.volume_output() + self.p2.volume_output()) as usize;
+        let pulse_part = PULSE_TABLE[pulse_sum.min(30)]; // Q16.16
+
+        let tri = self.triangle.output() as usize;
+        let noi = self.noise.output() as usize;
+        let dmc = self.dmc.output() as usize;
+        let tnd_sum_q16 = TRI_TABLE[tri] + NOI_TABLE[noi] + DMC_TABLE[dmc]; // Q16.16
+
+        let tnd_part = if tnd_sum_q16 == 0 {
+            0
         } else {
-            95.88 / (8128.0 / pulse_sum + 100.0)
+            let s = tnd_sum_q16 as i64;
+            // tnd_part = 159.79 * tnd_sum / (1.0 + 100.0 * tnd_sum)
+            // tnd_part_q16 = (15979 * s * 65536) / (6553600 + 10000 * s)
+            let num = 15979i64 * s * 65536;
+            let den = 6_553_600i64 + 10_000 * s;
+            (num / den) as i32
         };
-        let tnd_part = {
-            let tri = triangle_out / 8227.0;
-            let noi = noise_out / 12241.0;
-            let dmc = dmc_out / 22638.0;
-            let tnd_sum = tri + noi + dmc;
-            if tnd_sum == 0.0 {
-                0.0
-            } else {
-                159.79 / (1.0 / tnd_sum + 100.0)
-            }
-        };
-        // Clamp to valid audio range [-1.0, 1.0]
-        (pulse_part + tnd_part).clamp(0.0, 1.0)
+
+        (pulse_part + tnd_part).clamp(0, 65535)
     }
 
     pub fn read(&mut self, addr: u16) -> u8 {

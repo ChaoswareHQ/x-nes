@@ -174,19 +174,16 @@ impl Ppu {
         }
     }
 
-    pub(super) fn fetch_bg_tile(&mut self, mapper: &mut Mapper) {
+    /// Fetch next background tile pattern from VRAM.
+    /// This triggers mapper CHR reads (needed for MMC3 IRQ timing).
+    pub(super) fn fetch_bg_tile(&self, mapper: &mut Mapper) {
         let tile_x = self.v & 0x001F;
         let tile_y = (self.v >> 5) & 0x001F;
         let fine_y = (self.v >> 12) & 0x0007;
         let nt = (self.v >> 10) & 0x0003;
-        let (_, attr_bits, pat_low, pat_high) =
-            self.fetch_tile_pattern(tile_x, tile_y, fine_y, nt, mapper);
-        self.bg_shift_low = (self.bg_shift_low & 0x00FF) | ((pat_low as u16) << 8);
-        self.bg_shift_high = (self.bg_shift_high & 0x00FF) | ((pat_high as u16) << 8);
-        self.bg_attr_shift_low =
-            (self.bg_attr_shift_low & 0x00FF) | (((attr_bits & 1) as u16) << 8);
-        self.bg_attr_shift_high =
-            (self.bg_attr_shift_high & 0x00FF) | ((((attr_bits >> 1) & 1) as u16) << 8);
+        // Discard fetched data — pixel rendering uses on-the-fly compute_bg_pixel
+        // which reads directly from VRAM via the mapper.
+        self.fetch_tile_pattern(tile_x, tile_y, fine_y, nt, mapper);
     }
 
     #[allow(clippy::too_many_arguments)]

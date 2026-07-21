@@ -79,7 +79,7 @@ struct App {
     gilrs: Gilrs,
     audio_stream: Option<cpal::Stream>,
     audio_tx: Option<
-        ringbuf::CachingProd<std::sync::Arc<ringbuf::SharedRb<ringbuf::storage::Heap<f32>>>>,
+        ringbuf::CachingProd<std::sync::Arc<ringbuf::SharedRb<ringbuf::storage::Heap<i16>>>>,
     >,
 }
 
@@ -145,10 +145,10 @@ impl ApplicationHandler for App {
                         eprintln!("Audio config: {}Hz, {} channels", sample_rate, channels);
 
                         // Update APU sample rate to match device
-                        self.bus.apu.set_sample_rate(sample_rate as f64);
+                        self.bus.apu.set_sample_rate(sample_rate);
 
                         // Use a larger ring buffer to tolerate timing jitter
-                        let rb = HeapRb::<f32>::new(32768);
+                        let rb = HeapRb::<i16>::new(32768);
                         let (mut prod, mut cons) = rb.split();
                         let ch = channels as usize;
 
@@ -156,7 +156,7 @@ impl ApplicationHandler for App {
                         // to prevent underruns while the emulator gets going
                         let frames_to_fill = (sample_rate as f64 / 60.0 * 2.0) as usize;
                         for _ in 0..frames_to_fill {
-                            let _ = prod.try_push(0.0);
+                            let _ = prod.try_push(0);
                         }
                         eprintln!("Pre-filled buffer with {} samples", frames_to_fill);
 
@@ -168,7 +168,7 @@ impl ApplicationHandler for App {
                             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                                 // Fill all channels with the same mono sample
                                 for frame in data.chunks_mut(ch) {
-                                    let s = cons.try_pop().unwrap_or(0.0);
+                                    let s = cons.try_pop().unwrap_or(0) as f32 / 32767.0;
                                     for sample in frame.iter_mut() {
                                         *sample = s;
                                     }

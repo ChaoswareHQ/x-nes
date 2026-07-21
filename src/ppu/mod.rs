@@ -43,10 +43,6 @@ pub struct Ppu {
     sprite_count: u8,
     sprite_indices: [u8; 8],
     sprite_zero_hit_possible: bool,
-    bg_shift_low: u16,
-    bg_shift_high: u16,
-    bg_attr_shift_low: u16,
-    bg_attr_shift_high: u16,
     vbl_suppressed: bool,
     render_v: u16,
     render_fine_x: u8,
@@ -88,10 +84,6 @@ impl Ppu {
             sprite_count: 0,
             sprite_indices: [0; 8],
             sprite_zero_hit_possible: true,
-            bg_shift_low: 0,
-            bg_shift_high: 0,
-            bg_attr_shift_low: 0,
-            bg_attr_shift_high: 0,
             vbl_suppressed: false,
             render_v: 0,
             render_fine_x: 0,
@@ -106,7 +98,6 @@ impl Ppu {
         self.scanline < VISIBLE_SCANLINES || self.scanline == PRERENDER_SCANLINE
     }
 
-    // ---- Scroll register operations ----
     fn increment_coarse_x(&mut self) {
         if (self.v & 0x001F) == 31 {
             self.v = (self.v & !0x001F) ^ 0x0400;
@@ -116,19 +107,14 @@ impl Ppu {
     }
 
     fn increment_coarse_y(&mut self) {
-        // Real NES increment_coarse_y: first handle fine_y, then coarse_y.
-        // But the order doesn't matter for the same-tick result.
         let y = self.v & 0x03E0;
         self.v = if y == 0x03C0 {
-            // coarse_y = 30: wrap to 0, toggle vertical NT (bit 11)
             (self.v & !0x03E0) ^ 0x0800
         } else if y == 0x03E0 {
-            // coarse_y = 31: wrap to 0, toggle horizontal NT (bit 10)
             (self.v & !0x03E0) ^ 0x0400
         } else {
             self.v + 0x0020
         };
-        // Handle fine_y (bits 12-14)
         if (self.v >> 12) & 7 == 7 {
             self.v &= !0x7000;
         } else {
@@ -144,21 +130,12 @@ impl Ppu {
         self.v = (self.v & !0x7BE0) | (self.t & 0x7BE0);
     }
 
-    // ---- Main cycle-accurate tick ----
     #[allow(clippy::too_many_lines)]
     pub fn tick(&mut self, mapper: &mut Mapper) {
         self.tick_count += 1;
         let sl = self.scanline;
         let cy = self.cycle;
 
-        // ===== Cycle advance / scanline management =====
-        // On odd frames with rendering enabled, the prerender scanline (261)
-        // has 340 cycles instead of 341. Cycle 340 is skipped.
-        // The skip is checked AFTER processing cycle 339 (when cy == 339
-        // and we're about to increment to cy == 340 for the next tick).
-        // We achieve this by checking cy == 339 at the START of the tick:
-        // on skip, process cycle 339, then advance (skipping the cy=340 tick).
-        // On normal, just process and let the next tick (cy=340) handle advance.
         if cy > 339 {
             self.cycle = 0;
             let ns = sl.wrapping_add(1);
@@ -169,32 +146,23 @@ impl Ppu {
             } else {
                 self.scanline = ns;
             }
-            // Cycle 0 of scanline 261 (prerender): vertical scroll copy, clear flags
             if self.scanline == PRERENDER_SCANLINE {
                 self.sprite_zero_hit_possible = true;
                 if self.rendering_enabled() {
                     self.copy_vertical();
                 }
-                // Snapshot initial scroll after copy_vertical at the prerender.
                 self.render_v = self.v;
-                // Also snapshot fine_x (from VBlank $2005 writes).
-                // This ensures fine_x and coarse_x are in sync.
                 self.render_fine_x = self.fine_x;
             }
             return;
         }
         self.cycle += 1;
 
-        // Odd frame skip: after processing cycle 339 (now cy=340),
-        // and we're on prerender + odd frame + rendering, skip forward.
         if self.scanline == PRERENDER_SCANLINE
             && self.cycle == 340
             && self.odd_frame
             && (self.mask & 0x18) != 0
         {
-            // Skip cycle 340 entirely - go directly to scanline 0
-            // render_v is NOT updated here - it retains the initial scroll
-            // from cycle 0 of prerender + horizontal bits from cycle 257.
             self.cycle = 0;
             self.scanline = 0;
             self.odd_frame = !self.odd_frame;
@@ -219,20 +187,12 @@ impl Ppu {
             self.update_nmi_edge(false);
         }
 
-        // ===== Cycles 1-256: Visible rendering on visible/prerender scanlines =====
         if self.rendering_or_prerender() {
             if (1..=256).contains(&cy) {
-                // Fetch next tile every 8 cycles (shift register pipeline)
                 if self.rendering_enabled() && (cy & 7) == 1 {
                     self.fetch_bg_tile(mapper);
                     self.increment_coarse_x();
                 }
-                // Shift registers
-                self.bg_shift_low <<= 1;
-                self.bg_shift_high <<= 1;
-                self.bg_attr_shift_low <<= 1;
-                self.bg_attr_shift_high <<= 1;
-                // Render pixel on visible scanlines
                 if sl < VISIBLE_SCANLINES {
                     self.render_pixel(cy - 1, sl, mapper);
                 }

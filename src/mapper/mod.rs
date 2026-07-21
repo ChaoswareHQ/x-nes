@@ -32,29 +32,6 @@ pub enum Mapper {
     Null,
 }
 
-struct NullMapper;
-
-impl MapperImpl for NullMapper {
-    fn cpu_read(&mut self, _: u16) -> u8 {
-        0
-    }
-    fn cpu_write(&mut self, _: u16, _: u8) {}
-    fn ppu_read(&mut self, _: u16) -> u8 {
-        0
-    }
-    fn ppu_write(&mut self, _: u16, _: u8) {}
-    fn mirroring(&self) -> u8 {
-        0
-    }
-    fn irq_pending(&self) -> bool {
-        false
-    }
-    fn ack_irq(&mut self) {}
-    fn has_chr_ram(&self) -> bool {
-        true
-    }
-}
-
 impl Mapper {
     pub fn from_ines(
         id: u8,
@@ -88,33 +65,60 @@ impl Mapper {
         }
     }
 
-    fn dispatch<T>(&mut self, f: impl FnOnce(&mut dyn MapperImpl) -> T) -> T {
+    #[inline(always)]
+    pub fn cpu_read(&mut self, addr: u16) -> u8 {
         match self {
-            Self::Nrom(m) => f(&mut **m),
-            Self::UxRom(m) => f(&mut **m),
-            Self::Cnrom(m) => f(&mut **m),
-            Self::Mmc1(m) => f(&mut **m),
-            Self::Mmc3(m) => f(&mut **m),
-            Self::Axrom(m) => f(&mut **m),
-            Self::Gxrom(m) => f(&mut **m),
-            Self::Null => f(&mut NullMapper),
+            Self::Nrom(m) => m.cpu_read(addr),
+            Self::UxRom(m) => m.cpu_read(addr),
+            Self::Cnrom(m) => m.cpu_read(addr),
+            Self::Mmc1(m) => m.cpu_read(addr),
+            Self::Mmc3(m) => m.cpu_read(addr),
+            Self::Axrom(m) => m.cpu_read(addr),
+            Self::Gxrom(m) => m.cpu_read(addr),
+            Self::Null => 0,
         }
     }
 
-    pub fn cpu_read(&mut self, addr: u16) -> u8 {
-        self.dispatch(|m| m.cpu_read(addr))
-    }
-
+    #[inline(always)]
     pub fn cpu_write(&mut self, addr: u16, val: u8) {
-        self.dispatch(|m| m.cpu_write(addr, val));
+        match self {
+            Self::Nrom(m) => m.cpu_write(addr, val),
+            Self::UxRom(m) => m.cpu_write(addr, val),
+            Self::Cnrom(m) => m.cpu_write(addr, val),
+            Self::Mmc1(m) => m.cpu_write(addr, val),
+            Self::Mmc3(m) => m.cpu_write(addr, val),
+            Self::Axrom(m) => m.cpu_write(addr, val),
+            Self::Gxrom(m) => m.cpu_write(addr, val),
+            Self::Null => {}
+        }
     }
 
+    #[inline(always)]
     pub fn ppu_read(&mut self, addr: u16) -> u8 {
-        self.dispatch(|m| m.ppu_read(addr))
+        match self {
+            Self::Nrom(m) => m.ppu_read(addr),
+            Self::UxRom(m) => m.ppu_read(addr),
+            Self::Cnrom(m) => m.ppu_read(addr),
+            Self::Mmc1(m) => m.ppu_read(addr),
+            Self::Mmc3(m) => m.ppu_read(addr),
+            Self::Axrom(m) => m.ppu_read(addr),
+            Self::Gxrom(m) => m.ppu_read(addr),
+            Self::Null => 0,
+        }
     }
 
+    #[inline(always)]
     pub fn ppu_write(&mut self, addr: u16, val: u8) {
-        self.dispatch(|m| m.ppu_write(addr, val));
+        match self {
+            Self::Nrom(m) => m.ppu_write(addr, val),
+            Self::UxRom(m) => m.ppu_write(addr, val),
+            Self::Cnrom(m) => m.ppu_write(addr, val),
+            Self::Mmc1(m) => m.ppu_write(addr, val),
+            Self::Mmc3(m) => m.ppu_write(addr, val),
+            Self::Axrom(m) => m.ppu_write(addr, val),
+            Self::Gxrom(m) => m.ppu_write(addr, val),
+            Self::Null => {}
+        }
     }
 
     pub fn mirroring(&self) -> u8 {
@@ -144,11 +148,29 @@ impl Mapper {
     }
 
     pub fn ack_irq(&mut self) {
-        self.dispatch(|m| m.ack_irq());
+        match self {
+            Self::Nrom(m) => m.ack_irq(),
+            Self::UxRom(m) => m.ack_irq(),
+            Self::Cnrom(m) => m.ack_irq(),
+            Self::Mmc1(m) => m.ack_irq(),
+            Self::Mmc3(m) => m.ack_irq(),
+            Self::Axrom(m) => m.ack_irq(),
+            Self::Gxrom(m) => m.ack_irq(),
+            Self::Null => {}
+        }
     }
 
     pub fn clock_scanline(&mut self) {
-        self.dispatch(|m| m.clock_scanline());
+        match self {
+            Self::Nrom(m) => m.clock_scanline(),
+            Self::UxRom(m) => m.clock_scanline(),
+            Self::Cnrom(m) => m.clock_scanline(),
+            Self::Mmc1(m) => m.clock_scanline(),
+            Self::Mmc3(m) => m.clock_scanline(),
+            Self::Axrom(m) => m.clock_scanline(),
+            Self::Gxrom(m) => m.clock_scanline(),
+            Self::Null => {}
+        }
     }
 
     pub fn has_chr_ram(&self) -> bool {
