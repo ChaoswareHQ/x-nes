@@ -1,3 +1,14 @@
+// Test file — some pedantic lints don't apply to test helpers.
+#![allow(
+    clippy::cast_lossless,
+    clippy::cast_precision_loss,
+    clippy::doc_markdown,
+    clippy::missing_const_for_fn,
+    clippy::too_many_lines,
+    clippy::trivially_copy_pass_by_ref,
+    clippy::uninlined_format_args
+)]
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -22,17 +33,9 @@ enum TestStatus {
 impl TestStatus {
     fn from_val(val: u8) -> Self {
         match val & 0x03 {
-            1 => TestStatus::Pass,
-            2 => TestStatus::Fail(val >> 2),
-            _ => TestStatus::Skip,
-        }
-    }
-
-    fn label(&self) -> &'static str {
-        match self {
-            TestStatus::Skip => "SKIP",
-            TestStatus::Pass => "PASS",
-            TestStatus::Fail(_) => "FAIL",
+            1 => Self::Pass,
+            2 => Self::Fail(val >> 2),
+            _ => Self::Skip,
         }
     }
 }
@@ -43,7 +46,6 @@ struct TestResult {
     addr: u16,
     name: &'static str,
     status: TestStatus,
-    raw: u8,
 }
 
 // ---------------------------------------------------------------------------
@@ -116,7 +118,6 @@ impl AccuracyCoinRunner {
                     addr,
                     name: test_name(addr),
                     status: TestStatus::from_val(val),
-                    raw: val,
                 });
             }
         }
@@ -238,23 +239,15 @@ fn test_name(addr: u16) -> &'static str {
 fn test_subsystem(addr: u16) -> &'static str {
     match addr {
         0x0400..=0x0408 => "CPU-Basics",
-        0x0409..=0x0417 => "CPU-Illegal",
-        0x0419..=0x044B => "CPU-Illegal",
+        0x0409..=0x0417 | 0x0419..=0x044B => "CPU-Illegal",
         0x044C..=0x044F => "PPU-DMA",
-        0x0450..=0x045B => "PPU",
+        0x0450..=0x045B | 0x0476 | 0x047E..=0x048F => "PPU",
         0x045C..=0x046A => "APU",
-        0x046B..=0x046C => "DMA",
-        0x046D..=0x0475 => "CPU",
-        0x0476 => "PPU",
-        0x0477..=0x0479 => "DMA",
+        0x046B..=0x046C | 0x0477..=0x0479 => "DMA",
+        0x046D..=0x0475 | 0x047C | 0x0490 | 0x0491 | 0x0492 => "CPU",
         0x047A => "Controller",
         0x047B => "PPU-OAM",
-        0x047C => "CPU",
         0x047D => "CPU-NOPs",
-        0x047E..=0x048F => "PPU",
-        0x0490 => "CPU",
-        0x0491 => "CPU",
-        0x0492 => "CPU",
         _ => "Unknown",
     }
 }
@@ -296,7 +289,7 @@ fn print_result_table(results: &[TestResult]) {
                 TestStatus::Skip => {
                     println!("  │   {marker} ${:04X} {:<32} SKIP", r.addr, r.name);
                 }
-                _ => {}
+                TestStatus::Pass => {}
             }
         }
     }
@@ -430,7 +423,7 @@ fn accuracy_coin_run_all_tests() {
     runner.press_start();
     runner.run_frames(6000);
     runner.release_start();
-    let run_elapsed = start.elapsed() - boot_elapsed;
+    let run_elapsed = start.elapsed().saturating_sub(boot_elapsed);
     println!("[Phase 2] Test run complete — {} additional frames, {run_elapsed:.2?}", 6000);
 
     // -- Phase 3: Collect and report results ----------------------------------
