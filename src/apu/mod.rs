@@ -151,7 +151,7 @@ pub struct Apu {
     /// The APU clocks timers and frame counter at half the CPU rate.
     /// This accumulator tracks CPU cycles and steps them every 2 cycles,
     /// carrying forward fractional cycles for accurate long-term timing.
-    apu_phase: u64,
+    phase: u64,
     pub p1: Pulse,
     pub p2: Pulse,
     triangle: Triangle,
@@ -186,7 +186,7 @@ impl Apu {
     pub fn new() -> Self {
         Self {
             cycles: 0,
-            apu_phase: 0,
+            phase: 0,
             p1: Pulse {
                 is_pulse1: true,
                 ..Pulse::default()
@@ -360,9 +360,9 @@ impl Apu {
             self.noise.step_timer();
 
             // Pulse timers and frame counter run at APU rate (every 2 CPU cycles)
-            self.apu_phase += 1;
-            if self.apu_phase >= 2 {
-                self.apu_phase -= 2;
+            self.phase += 1;
+            if self.phase >= 2 {
+                self.phase -= 2;
                 self.p1.step_timer();
                 self.p2.step_timer();
                 self.clock_frame_counter();
@@ -375,7 +375,7 @@ impl Apu {
                     let raw = self.mixer_output() as f64;
                     // First-order low-pass filter simulating NES analog output
                     const FILTER_ALPHA: f64 = 0.65;
-                    self.filtered_sample += FILTER_ALPHA * (raw - self.filtered_sample);
+                    self.filtered_sample = FILTER_ALPHA.mul_add(raw - self.filtered_sample, self.filtered_sample);
                     let out = self.filtered_sample as f32;
                     self.audio_samples[self.sample_count] = out;
                     self.sample_count += 1;
@@ -414,9 +414,9 @@ impl Apu {
             self.noise.step_timer();
 
             // Pulse timers and frame counter run at APU rate (every 2 CPU cycles)
-            self.apu_phase += 1;
-            if self.apu_phase >= 2 {
-                self.apu_phase -= 2;
+            self.phase += 1;
+            if self.phase >= 2 {
+                self.phase -= 2;
                 self.p1.step_timer();
                 self.p2.step_timer();
                 self.clock_frame_counter();
@@ -428,7 +428,7 @@ impl Apu {
                 if self.sample_count < self.audio_samples.len() {
                     let raw = self.mixer_output() as f64;
                     const FILTER_ALPHA: f64 = 0.65;
-                    self.filtered_sample += FILTER_ALPHA * (raw - self.filtered_sample);
+                    self.filtered_sample = FILTER_ALPHA.mul_add(raw - self.filtered_sample, self.filtered_sample);
                     let out = self.filtered_sample as f32;
                     self.audio_samples[self.sample_count] = out;
                     self.sample_count += 1;
