@@ -181,33 +181,42 @@ impl Ppu {
         }
 
         // Generate A12 edges for sprite pattern fetches (real NES PPU does
-        // these during cycles 257-320 of the previous scanline). Each visible
-        // sprite generates 2 CHR reads (pattern low + pattern high) which
+        // these during cycles 257-320 of the previous scanline). Each sprite
+        // slot generates 2 CHR reads (pattern low + pattern high) which
         // clock the MMC3 scanline counter via A12 rising edges.
         // We read through chr_read() here so that notify_mapper_a12 tracks
         // A12 state properly for the MMC3 IRQ.
-        for si in 0..self.sprite_count.min(8) {
-            let idx = self.sprite_indices[si as usize] as usize;
-            let oi = idx * 4;
-            let tile = self.oam[oi + 1] as u16;
-            let attr = self.oam[oi + 2];
-            let flip_y = attr & 0x80 != 0;
-            let pixel_y = if flip_y {
-                (sprite_h as u8).wrapping_sub(1)
-            } else {
-                0
-            };
-            let tile_addr = if use_16 {
-                let bank = if tile & 1 != 0 { 0x1000 } else { 0x0000 };
-                let base_tile = tile & 0xFE;
-                bank | (base_tile << 4) | pixel_y as u16
-            } else {
-                let bank = if self.ctrl & 0x08 != 0 {
-                    0x1000
+        //
+        // The real PPU always accesses 8 sprite slots per scanline, using
+        // tile $FF for empty slots (dummy fetches). These still generate
+        // A12 edges and clock the MMC3 counter.
+        for si in 0..8 {
+            let tile_addr = if si < self.sprite_count {
+                let idx = self.sprite_indices[si as usize] as usize;
+                let oi = idx * 4;
+                let tile = self.oam[oi + 1] as u16;
+                let attr = self.oam[oi + 2];
+                let flip_y = attr & 0x80 != 0;
+                let pixel_y = if flip_y {
+                    (sprite_h as u8).wrapping_sub(1)
                 } else {
-                    0x0000
+                    0
                 };
-                bank | (tile << 4) | pixel_y as u16
+                if use_16 {
+                    let bank = if tile & 1 != 0 { 0x1000 } else { 0x0000 };
+                    let base_tile = tile & 0xFE;
+                    bank | (base_tile << 4) | pixel_y as u16
+                } else {
+                    let bank = if self.ctrl & 0x08 != 0 {
+                        0x1000
+                    } else {
+                        0x0000
+                    };
+                    bank | (tile << 4) | pixel_y as u16
+                }
+            } else {
+                // Dummy sprite fetch: tile $FF from sprite pattern table
+                ((self.ctrl & 0x08 != 0) as u16) * 0x1000 | (0xFFu16 << 4)
             };
             // Simulate A12-low nametable address access between sprite pattern
             // fetches (real PPU interleaves NT/AT reads with pattern reads).

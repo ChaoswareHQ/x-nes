@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use super::MapperImpl;
+use alloc::vec::Vec;
 
 #[allow(dead_code)]
 pub struct Mmc3 {
@@ -79,8 +79,12 @@ impl MapperImpl for Mmc3 {
     fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
             0x6000..=0x7FFF => {
-                // PRG RAM is always readable (enable flag only gates writes)
-                self.prg_ram[(addr & 0x1FFF) as usize]
+                // PRG RAM returns data only when enabled (bit 7 of $A001)
+                if self.prg_ram_enable {
+                    self.prg_ram[(addr & 0x1FFF) as usize]
+                } else {
+                    0 // open bus when disabled
+                }
             }
             0x8000..=0x9FFF => {
                 // 8KB switchable or fixed (controlled by bank_select bit 6)
@@ -130,7 +134,9 @@ impl MapperImpl for Mmc3 {
     fn cpu_write(&mut self, addr: u16, val: u8) {
         match addr {
             0x6000..=0x7FFF => {
-                if self.prg_ram_write {
+                // Write allowed when PRG RAM enabled AND bit 6 of $A001 is 0
+                // (bit 6 = 1 means write-protected)
+                if self.prg_ram_enable && !self.prg_ram_write {
                     self.prg_ram[(addr & 0x1FFF) as usize] = val;
                 }
             }
@@ -168,7 +174,9 @@ impl MapperImpl for Mmc3 {
                     // nt_index: mirror 0 = horizontal, mirror 1 = vertical
                     self.mirror = u8::from(val & 1 == 0); // invert to match nt_index
                 } else {
-                    // $A001: PRG RAM protect
+                    // $A001: PRG RAM control
+                    //   bit 7: PRG RAM enable (1 = enabled)
+                    //   bit 6: PRG RAM write protect (1 = protected, writes blocked)
                     self.prg_ram_enable = val & 0x80 != 0;
                     self.prg_ram_write = val & 0x40 != 0;
                 }
@@ -179,14 +187,14 @@ impl MapperImpl for Mmc3 {
                     self.irq_latch = val;
                 } else {
                     // $C001: IRQ reload (reloads latch on next A12 edge)
-                    // Also acknowledges any pending IRQ (real MMC3 behavior)
-                    self.irq_flag = false;
+                    // Does NOT acknowledge IRQ — only $E000/$E001 clear the flag
                     self.irq_reload = true;
                 }
             }
             0xE000..=0xFFFF => {
                 if addr & 1 == 0 {
-                    // $E000: IRQ acknowledge (clears flag, does NOT disable)
+                    // $E000: IRQ disable + acknowledge (clears flag, disables IRQ)
+                    self.irq_enabled = false;
                     self.irq_flag = false;
                 } else {
                     // $E001: IRQ enable (reload happens on next A12 edge)
@@ -263,10 +271,10 @@ impl MapperImpl for Mmc3 {
                 ((b | sub) * 0x400, 0x400)
             } else {
                 let idx = match (a >> 10) & 3 {
-                    0 => 4,
-                    1 => 5,
-                    2 => 6,
-                    _ => 7,
+                    0 => 2,
+                    1 => 3,
+                    2 => 4,
+                    _ => 5,
                 };
                 (self.chr_banks[idx] as usize * 0x400, 0x400)
             }
