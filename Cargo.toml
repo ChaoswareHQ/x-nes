@@ -39,14 +39,6 @@ name = "main"
 path = "examples/main.rs"
 
 [[example]]
-name = "romdump"
-path = "examples/romdump.rs"
-
-[[example]]
-name = "debug"
-path = "examples/debug.rs"
-
-[[example]]
 name = "window"
 path = "examples/window.rs"
 

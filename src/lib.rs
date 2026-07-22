@@ -35,7 +35,6 @@ pub mod clock;
 pub mod cpu;
 
 pub mod controller;
-pub mod debug;
 pub mod interrupt;
 pub mod mapper;
 pub mod ops;
