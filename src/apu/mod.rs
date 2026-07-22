@@ -77,8 +77,11 @@ const DMC_TABLE: [i32; 128] = {
     t
 };
 
-/// Low-pass filter coefficient in Q16.16 (0.65 * 65536).
-const FILTER_ALPHA: i32 = 42598;
+/// Low-pass filter coefficient in Q16.16 (0.45 * 65536).
+/// Cutoff ~4.6 kHz @ 44.1 kHz — removes high-frequency aliasing
+/// from the noise channel's rapid LFSR clocking while preserving
+/// the core NES audio bandwidth.
+const FILTER_ALPHA: i32 = 29491;
 
 /// Q16.16 representation of 1.0.
 const ONE_Q16: u32 = 65536;
@@ -223,6 +226,16 @@ pub struct Apu {
     sample_period: u32,
     /// Low-pass filter state in Q16.16 fixed-point (emulates ~14KHz cutoff).
     filtered_sample: i32,
+    /// DC blocking high-pass filter state.
+    /// y[n] = 0.979 * y[n-1] + x[n] - x[n-1]  (cutoff ~150 Hz @ 44.1 kHz)
+    hp_x: i64,
+    hp_y: i64,
+    /// Accumulated mixer output over the current sample period.
+    /// Averaged at sample time to act as a crude anti-aliasing filter,
+    /// reducing aliasing from noise LFSR and square wave harmonics.
+    /// See Mesen's `blip_buf` band-limited synthesis for the gold standard.
+    mix_accum: i64,
+    mix_accum_count: u32,
 
     // Frame counter
     frame_cycles: u32,
@@ -265,6 +278,10 @@ impl Apu {
             sample_timer: 0,
             sample_period: (((CPU_HZ) << 16) / 44100) as u32,
             filtered_sample: 0,
+            hp_x: 0,
+            hp_y: 0,
+            mix_accum: 0,
+            mix_accum_count: 0,
             frame_cycles: 0,
             frame_mode: false,
             interrupt_inhibit: false,
@@ -431,15 +448,39 @@ impl Apu {
                 self.clock_frame_counter();
             }
 
+            // Accumulate the current mixer output every CPU cycle.
+            // Using the average over the sample period (instead of a single
+            // snapshot) acts as a boxcar anti-aliasing filter — it
+            // attenuates high-frequency content like the noise channel's
+            // rapid LFSR clocking before sampling.
+            self.mix_accum += self.mixer_output() as i64;
+            self.mix_accum_count += 1;
+
             self.sample_timer = self.sample_timer.wrapping_add(ONE_Q16);
             if self.sample_timer >= self.sample_period {
                 self.sample_timer -= self.sample_period;
                 if self.sample_count < self.audio_samples.len() {
-                    let raw = self.mixer_output();
+                    // Use the accumulated average over the sample period
+                    // instead of a single instantaneous snapshot.
+                    let raw = (self.mix_accum / self.mix_accum_count as i64) as i32;
+                    self.mix_accum = 0;
+                    self.mix_accum_count = 0;
                     let diff = raw as i64 - self.filtered_sample as i64;
                     let delta = (diff * FILTER_ALPHA as i64) >> 16;
                     self.filtered_sample = (self.filtered_sample as i64 + delta) as i32;
-                    self.audio_samples[self.sample_count] = (self.filtered_sample >> 1) as i16;
+                    // DC blocking high-pass filter (cutoff ~150 Hz @ 44.1 kHz)
+                    // Removes low-frequency hum and DC offset that accumulates
+                    // over long play sessions from imperfect sample timing.
+                    // y[n] = 0.979 * y[n-1] + x[n] - x[n-1]
+                    const HP_COEFF: i64 = 64150; // 0.979 in Q16.16
+                    let x = self.filtered_sample as i64;
+                    // Prime hp_x on first non-zero sample to avoid startup pop
+                    if self.hp_x == 0 && x != 0 {
+                        self.hp_x = x;
+                    }
+                    self.hp_y = ((self.hp_y * HP_COEFF) >> 16) + x - self.hp_x;
+                    self.hp_x = x;
+                    self.audio_samples[self.sample_count] = (self.hp_y >> 1) as i16;
                     self.sample_count += 1;
                 }
             }
