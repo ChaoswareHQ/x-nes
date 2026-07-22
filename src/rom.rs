@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use crate::mapper::Mapper;
+use alloc::vec::Vec;
 
 pub struct Rom {
     pub prg: Vec<u8>,
@@ -90,7 +90,11 @@ mod tests {
         // iNES 2.0 formula should give mapper 4 (CORRECT)
         let data = fake_header(1, 0, 0x40, 0x08);
         let rom = Rom::new(&data).unwrap();
-        assert_eq!(rom.mapper_id, 4, "iNES 2.0 should decode mapper 4, got {}", rom.mapper_id);
+        assert_eq!(
+            rom.mapper_id, 4,
+            "iNES 2.0 should decode mapper 4, got {}",
+            rom.mapper_id
+        );
     }
 
     #[test]
@@ -98,7 +102,11 @@ mod tests {
         // iNES 1.0 header with mapper 4: flags6=0x40, flags7=0x00
         let data = fake_header(1, 0, 0x40, 0x00);
         let rom = Rom::new(&data).unwrap();
-        assert_eq!(rom.mapper_id, 4, "iNES 1.0 should decode mapper 4, got {}", rom.mapper_id);
+        assert_eq!(
+            rom.mapper_id, 4,
+            "iNES 1.0 should decode mapper 4, got {}",
+            rom.mapper_id
+        );
     }
 
     #[test]
@@ -107,7 +115,11 @@ mod tests {
         // Mapper = (flags7 & 0x0F) << 4 | (flags6 >> 4) = (0x00) << 4 | 1 = 1
         let data = fake_header(1, 0, 0x10, 0x80);
         let rom = Rom::new(&data).unwrap();
-        assert_eq!(rom.mapper_id, 1, "VS flag should not affect mapper, got {}", rom.mapper_id);
+        assert_eq!(
+            rom.mapper_id, 1,
+            "VS flag should not affect mapper, got {}",
+            rom.mapper_id
+        );
     }
 
     #[test]
@@ -220,8 +232,8 @@ mod tests {
     fn mmc3_basic_read_write() {
         // Create a proper mapper 4 (MMC3) ROM with known data
         let mut data = vec![0x4E, 0x45, 0x53, 0x1A];
-        data.push(1);  // prg_16kb = 1 (16KB)
-        data.push(1);  // chr_8kb = 1 (8KB)
+        data.push(1); // prg_16kb = 1 (16KB)
+        data.push(1); // chr_8kb = 1 (8KB)
         data.push(0x40); // flags6: mapper low nibble = 4
         data.push(0x00); // flags7: mapper high nibble = 0, not iNES 2.0
         data.resize(16, 0);
@@ -229,7 +241,11 @@ mod tests {
         data.extend(&[0xCDu8; 0x2000]); // 8KB CHR
 
         let rom = Rom::new(&data).unwrap();
-        assert_eq!(rom.mapper_id, 4, "should detect mapper 4, got {}", rom.mapper_id);
+        assert_eq!(
+            rom.mapper_id, 4,
+            "should detect mapper 4, got {}",
+            rom.mapper_id
+        );
         assert!(!rom.has_chr_ram);
 
         let mut mapper = rom.create_mapper();
@@ -238,12 +254,28 @@ mod tests {
         // With 16KB PRG (2 banks), prg_bank_count = 2, fixed bank = last = 1
         // $8000 = fixed to bank prg_bank_count-2 = 0
         // $E000 = fixed to last bank = 1
-        assert_eq!(mapper.cpu_read(0x8000), 0xAB, "$8000 should read PRG bank 0");
-        assert_eq!(mapper.cpu_read(0xE000), 0xAB, "$E000 should read PRG bank 1");
+        assert_eq!(
+            mapper.cpu_read(0x8000),
+            0xAB,
+            "$8000 should read PRG bank 0"
+        );
+        assert_eq!(
+            mapper.cpu_read(0xE000),
+            0xAB,
+            "$E000 should read PRG bank 1"
+        );
 
         // CHR reads should return CHR data from bank 0 (all banks start at 0)
-        assert_eq!(mapper.ppu_read(0x0000), 0xCD, "PPU $0000 should read CHR bank 0");
-        assert_eq!(mapper.ppu_read(0x1FFF), 0xCD, "PPU $1FFF should read CHR bank 0");
+        assert_eq!(
+            mapper.ppu_read(0x0000),
+            0xCD,
+            "PPU $0000 should read CHR bank 0"
+        );
+        assert_eq!(
+            mapper.ppu_read(0x1FFF),
+            0xCD,
+            "PPU $1FFF should read CHR bank 0"
+        );
     }
 
     #[test]
@@ -267,16 +299,34 @@ mod tests {
         data.extend(vec![0x00u8; 0x20000]);
 
         let rom = Rom::new(&data).unwrap();
-        assert_eq!(rom.mapper_id, 4, "SMB3 should be mapper 4, got {}", rom.mapper_id);
-        assert_eq!(rom.prg.len(), 0x40000, "PRG should be 256KB, got {}KB", rom.prg.len() / 1024);
-        assert_eq!(rom.chr.len(), 0x20000, "CHR should be 128KB, got {}KB", rom.chr.len() / 1024);
+        assert_eq!(
+            rom.mapper_id, 4,
+            "SMB3 should be mapper 4, got {}",
+            rom.mapper_id
+        );
+        assert_eq!(
+            rom.prg.len(),
+            0x40000,
+            "PRG should be 256KB, got {}KB",
+            rom.prg.len() / 1024
+        );
+        assert_eq!(
+            rom.chr.len(),
+            0x20000,
+            "CHR should be 128KB, got {}KB",
+            rom.chr.len() / 1024
+        );
         assert!(!rom.has_chr_ram, "SMB3 uses CHR ROM");
 
         // Verify the mapper reads the correct boot bank
         // MMC3 default mode (bit 6=0): $8000 = R6 (switchable, initially bank 0)
         //                              $E000 = fixed to last bank (index 31)
         let mut mapper = rom.create_mapper();
-        assert_eq!(mapper.cpu_read(0x8000), 0, "$8000 should be PRG bank 0 (R6 init)");
+        assert_eq!(
+            mapper.cpu_read(0x8000),
+            0,
+            "$8000 should be PRG bank 0 (R6 init)"
+        );
         assert_eq!(mapper.cpu_read(0xE000), 31, "$E000 should be PRG bank 31");
     }
 
@@ -284,7 +334,7 @@ mod tests {
     fn mmc3_prg_bank_switching() {
         let mut data = vec![0x4E, 0x45, 0x53, 0x1A];
         data.push(16); // prg_16kb = 16 (256KB)
-        data.push(1);  // chr_8kb = 1 (8KB)
+        data.push(1); // chr_8kb = 1 (8KB)
         data.push(0x40); // mapper 4
         data.push(0x00);
         data.resize(16, 0);
@@ -302,14 +352,26 @@ mod tests {
         // Default PRG mode (bit 6=0): $8000 = R6 (switchable, initially bank 0)
         //                             $C000 = fixed to second-to-last (30)
         //                             $E000 = fixed to last bank (31)
-        assert_eq!(mapper.cpu_read(0x8000), 0, "$8000 should be PRG bank 0 (R6 init)");
+        assert_eq!(
+            mapper.cpu_read(0x8000),
+            0,
+            "$8000 should be PRG bank 0 (R6 init)"
+        );
         assert_eq!(mapper.cpu_read(0xE000), 31, "$E000 should be PRG bank 31");
 
         // Write R6=5 via $8001: $8000 should now read bank 5
         mapper.cpu_write(0x8000, 0x06);
         mapper.cpu_write(0x8001, 5);
-        assert_eq!(mapper.cpu_read(0x8000), 5, "$8000 should be PRG bank 5 after R6 write");
-        assert_eq!(mapper.cpu_read(0xC000), 30, "$C000 should be PRG bank 30 (fixed-2)");
+        assert_eq!(
+            mapper.cpu_read(0x8000),
+            5,
+            "$8000 should be PRG bank 5 after R6 write"
+        );
+        assert_eq!(
+            mapper.cpu_read(0xC000),
+            30,
+            "$C000 should be PRG bank 30 (fixed-2)"
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use super::MapperImpl;
+use alloc::vec::Vec;
 
 #[allow(dead_code)]
 pub struct Mmc1 {

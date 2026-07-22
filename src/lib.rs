@@ -118,8 +118,7 @@ pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
         bus.cpu_cycle = svc_start + 7;
         bus.catch_up_ppu();
         cycles_extra += 7;
-    }
-    else if !(if is_cli_sei {
+    } else if !(if is_cli_sei {
         i_flag_for_irq
     } else {
         cpu.get_flag(FLAG_INTERRUPT)

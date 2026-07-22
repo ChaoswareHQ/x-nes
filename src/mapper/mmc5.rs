@@ -72,18 +72,18 @@ impl Mmc5 {
 
         let mut chr_sprite_reg = [0u8; 8];
         let mut chr_bg_reg = [0u8; 4];
-        for i in 0..8 {
-            chr_sprite_reg[i] = i as u8;
+        for (i, reg) in chr_sprite_reg.iter_mut().enumerate() {
+            *reg = i as u8;
         }
-        for i in 0..4 {
-            chr_bg_reg[i] = i as u8;
+        for (i, reg) in chr_bg_reg.iter_mut().enumerate() {
+            *reg = i as u8;
         }
 
         let prg_reg = [
             0,
             1,
-            if prg8_count >= 2 { prg8_count - 2 } else { 0 },
-            if prg8_count >= 1 { prg8_count - 1 } else { 0 },
+            prg8_count.saturating_sub(2),
+            prg8_count.saturating_sub(1),
         ];
 
         Self {
@@ -161,180 +161,59 @@ impl Mmc5 {
         // Other value pairs (e.g., 0x03/0x00) allow writes.
         self.prg_ram_protect1 == 0x02 && self.prg_ram_protect2 == 0x01
     }
-}
 
-impl MapperImpl for Mmc5 {
-    fn cpu_read(&mut self, addr: u16) -> u8 {
-        match addr {
-            0x5000..=0x5015 => {
-                // MMC5 expansion audio registers — return 0 for reads
-                // $5015 returns audio status
-                if addr == 0x5015 {
-                    return 0;
-                }
-                0
-            }
-            0x5204 => {
-                // IRQ status: reading clears bit 7 and acknowledges IRQ
-                let val = self.irq_status;
-                self.irq_status &= !0x80;
-                self.irq_pending_flag = false;
-                val
-            }
-            0x5205 => (self.mul_result & 0xFF) as u8,
-            0x5206 => ((self.mul_result >> 8) & 0xFF) as u8,
-            0x5C00..=0x5FFF => {
-                // ExRAM read: only available in modes 2 and 3
-                // Mode 0/1 return open bus (but we just return 0)
-                if self.ex_ram_mode >= 2 {
-                    self.ex_ram[(addr & 0x03FF) as usize]
-                } else {
-                    0
-                }
-            }
-            0x6000..=0x7FFF => {
-                // PRG RAM
-                let bank = (self.prg_ram_bank as usize & 0x07) * 0x2000;
-                let offset = (addr & 0x1FFF) as usize;
-                let ram_size = self.prg_ram.len();
-                self.prg_ram[(bank + offset) % ram_size]
-            }
-            0x8000..=0xFFFF => {
-                if self.prg.is_empty() {
-                    return 0;
-                }
-                let prg8 = self.prg_8k_count() as usize;
-                let bank = match self.prg_mode & 0x03 {
-                    0 => {
-                        // 32KB mode: uses $5117 (bank reg 3), bits 0-5
-                        let b = (self.get_prg_bank_reg(3) & 0x7C) as usize;
-                        (b % prg8) * 0x2000 + ((addr & 0x7FFF) as usize)
-                    }
-                    1 => {
-                        // 2x16KB: $8000-$BFFF from $5115, $C000-$FFFF from $5117
-                        if addr < 0xC000 {
-                            let b = (self.get_prg_bank_reg(1) & 0x7E) as usize;
-                            (b % prg8) * 0x2000 + ((addr & 0x3FFF) as usize)
-                        } else {
-                            let b = (self.get_prg_bank_reg(3) & 0x7E) as usize;
-                            (b % prg8) * 0x2000 + ((addr & 0x3FFF) as usize)
-                        }
-                    }
-                    2 => {
-                        // 16KB + 8KB + 8KB
-                        if addr < 0xC000 {
-                            let b = (self.get_prg_bank_reg(1) & 0x7E) as usize;
-                            (b % prg8) * 0x2000 + ((addr & 0x3FFF) as usize)
-                        } else if addr < 0xE000 {
-                            self.map_prg_8k(self.get_prg_bank_reg(2), addr)
-                        } else {
-                            self.map_prg_8k(self.get_prg_bank_reg(3), addr)
-                        }
-                    }
-                    _ => {
-                        // 4x8KB mode
-                        if addr < 0xA000 {
-                            self.map_prg_8k(self.get_prg_bank_reg(0), addr)
-                        } else if addr < 0xC000 {
-                            self.map_prg_8k(self.get_prg_bank_reg(1), addr)
-                        } else if addr < 0xE000 {
-                            self.map_prg_8k(self.get_prg_bank_reg(2), addr)
-                        } else {
-                            self.map_prg_8k(self.get_prg_bank_reg(3), addr)
-                        }
-                    }
-                };
-                self.prg[bank % self.prg.len()]
-            }
-            _ => 0,
-        }
-    }
-
-    fn cpu_write(&mut self, addr: u16, val: u8) {
-        match addr {
-            0x5000..=0x5015 => {
-                // MMC5 expansion audio registers (writes only)
-                // For now, just accept writes; audio not implemented
-            }
-            0x5100 => self.prg_mode = val & 0x03,
-            0x5101 => self.chr_mode = val & 0x03,
-            0x5102 => self.prg_ram_protect1 = val,
-            0x5103 => self.prg_ram_protect2 = val,
-            0x5104 => self.ex_ram_mode = val & 0x03,
-            0x5105 => self.nt_mapping_reg = val,
-            0x5106 => self.fill_tile = val,
-            0x5107 => self.fill_attr = val & 0x03,
-            0x5113 => self.prg_ram_bank = val & 0x07,
-            0x5114..=0x5117 => {
-                self.prg_reg[(addr - 0x5114) as usize] = val;
-            }
-            0x5120..=0x5127 => {
-                self.chr_sprite_reg[(addr - 0x5120) as usize] = val;
-            }
-            0x5128..=0x512B => {
-                self.chr_bg_reg[(addr - 0x5128) as usize] = val;
-            }
-            0x5130 => self.chr_upper_bits = val & 0x03,
-            0x5203 => self.irq_scanline = val,
-            0x5204 => {
-                self.irq_enable = (val & 0x80) != 0;
-                self.irq_status &= !0x80;
-                self.irq_pending_flag = false;
-            }
-            0x5205 => {
-                self.mul_a = val;
-                self.mul_result = u16::from(self.mul_a) * u16::from(self.mul_b);
-            }
-            0x5206 => {
-                self.mul_b = val;
-                self.mul_result = u16::from(self.mul_a) * u16::from(self.mul_b);
-            }
-            0x5C00..=0x5FFF => {
-                // ExRAM write: available in modes 0, 1, and 2.
-                // Mode 3 is read-only; writes are ignored.
-                if self.ex_ram_mode < 3 {
-                    self.ex_ram[(addr & 0x03FF) as usize] = val;
-                }
-            }
-            0x6000..=0x7FFF => {
-                // PRG RAM write (if not protected)
-                if !self.prg_ram_is_protected() {
-                    let bank = (self.prg_ram_bank as usize & 0x07) * 0x2000;
-                    let offset = (addr & 0x1FFF) as usize;
-                    let ram_size = self.prg_ram.len();
-                    self.prg_ram[(bank + offset) % ram_size] = val;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn ppu_read(&mut self, addr: u16) -> u8 {
-        let addr = addr & 0x3FFF;
-        if addr >= 0x2000 {
-            return 0; // Nametable reads handled by nt_read_ext
-        }
-        if self.has_chr_ram {
-            return self.chr[addr as usize];
-        }
-        if self.chr.is_empty() {
+    // Helper to resolve PRG ROM address for 0x8000..=0xFFFF reads
+    fn read_prg_rom(&self, addr: u16) -> u8 {
+        if self.prg.is_empty() {
             return 0;
         }
+        let prg8 = self.prg_8k_count() as usize;
+        let bank = match self.prg_mode & 0x03 {
+            0 => {
+                // 32KB mode: uses $5117 (bank reg 3), bits 0-5
+                let b = (self.get_prg_bank_reg(3) & 0x7C) as usize;
+                (b % prg8) * 0x2000 + ((addr & 0x7FFF) as usize)
+            }
+            1 => {
+                // 2x16KB: $8000-$BFFF from $5115, $C000-$FFFF from $5117
+                if addr < 0xC000 {
+                    let b = (self.get_prg_bank_reg(1) & 0x7E) as usize;
+                    (b % prg8) * 0x2000 + ((addr & 0x3FFF) as usize)
+                } else {
+                    let b = (self.get_prg_bank_reg(3) & 0x7E) as usize;
+                    (b % prg8) * 0x2000 + ((addr & 0x3FFF) as usize)
+                }
+            }
+            2 => {
+                // 16KB + 8KB + 8KB
+                if addr < 0xC000 {
+                    let b = (self.get_prg_bank_reg(1) & 0x7E) as usize;
+                    (b % prg8) * 0x2000 + ((addr & 0x3FFF) as usize)
+                } else if addr < 0xE000 {
+                    self.map_prg_8k(self.get_prg_bank_reg(2), addr)
+                } else {
+                    self.map_prg_8k(self.get_prg_bank_reg(3), addr)
+                }
+            }
+            _ => {
+                // 4x8KB mode
+                if addr < 0xA000 {
+                    self.map_prg_8k(self.get_prg_bank_reg(0), addr)
+                } else if addr < 0xC000 {
+                    self.map_prg_8k(self.get_prg_bank_reg(1), addr)
+                } else if addr < 0xE000 {
+                    self.map_prg_8k(self.get_prg_bank_reg(2), addr)
+                } else {
+                    self.map_prg_8k(self.get_prg_bank_reg(3), addr)
+                }
+            }
+        };
+        self.prg[bank % self.prg.len()]
+    }
 
-        let upper = u16::from(self.chr_upper_bits) << 8;
-        let slot = (addr >> 10) & 0x07;
-        let bg_slot = (addr >> 10) & 0x03;
-        let bg_fetch = self.chr_fetch_bg;
-
-        // ExRAM mode 1: extended attribute mode
-        // Each background tile can select its own 4KB CHR page via ExRAM
-        if bg_fetch && self.ex_ram_mode == 1 {
-            let bank = (u16::from(self.extended_chr_bank & 0x3F) << 2) + bg_slot;
-            let idx = self.map_chr_1k(bank, addr);
-            return self.chr[idx];
-        }
-
-        let bank: u16 = match self.chr_mode & 0x03 {
+    // Helper to resolve CHR bank address for ppu_read
+    fn resolve_chr_bank(&self, slot: u16, bg_slot: u16, bg_fetch: bool, upper: u16) -> u16 {
+        match self.chr_mode & 0x03 {
             0 => {
                 // 8KB mode
                 if bg_fetch {
@@ -380,8 +259,130 @@ impl MapperImpl for Mmc5 {
                     upper | u16::from(self.chr_sprite_reg[slot as usize])
                 }
             }
-        };
+        }
+    }
+}
 
+impl MapperImpl for Mmc5 {
+    fn cpu_read(&mut self, addr: u16) -> u8 {
+        match addr {
+            0x5000..=0x5015 => {
+                // MMC5 expansion audio registers — return 0 for reads
+                // $5015 returns audio status
+                if addr == 0x5015 {
+                    return 0;
+                }
+                0
+            }
+            0x5204 => {
+                // IRQ status: reading clears bit 7 and acknowledges IRQ
+                let val = self.irq_status;
+                self.irq_status &= !0x80;
+                self.irq_pending_flag = false;
+                val
+            }
+            0x5205 => (self.mul_result & 0xFF) as u8,
+            0x5206 => ((self.mul_result >> 8) & 0xFF) as u8,
+            0x5C00..=0x5FFF => {
+                // ExRAM read: only available in modes 2 and 3
+                // Mode 0/1 return open bus (but we just return 0)
+                if self.ex_ram_mode >= 2 {
+                    self.ex_ram[(addr & 0x03FF) as usize]
+                } else {
+                    0
+                }
+            }
+            0x6000..=0x7FFF => {
+                // PRG RAM
+                let bank = (self.prg_ram_bank as usize & 0x07) * 0x2000;
+                let offset = (addr & 0x1FFF) as usize;
+                let ram_size = self.prg_ram.len();
+                self.prg_ram[(bank + offset) % ram_size]
+            }
+            0x8000..=0xFFFF => self.read_prg_rom(addr),
+            _ => 0,
+        }
+    }
+
+    fn cpu_write(&mut self, addr: u16, val: u8) {
+        match addr {
+            0x5100 => self.prg_mode = val & 0x03,
+            0x5101 => self.chr_mode = val & 0x03,
+            0x5102 => self.prg_ram_protect1 = val,
+            0x5103 => self.prg_ram_protect2 = val,
+            0x5104 => self.ex_ram_mode = val & 0x03,
+            0x5105 => self.nt_mapping_reg = val,
+            0x5106 => self.fill_tile = val,
+            0x5107 => self.fill_attr = val & 0x03,
+            0x5113 => self.prg_ram_bank = val & 0x07,
+            0x5114..=0x5117 => {
+                self.prg_reg[(addr - 0x5114) as usize] = val;
+            }
+            0x5120..=0x5127 => {
+                self.chr_sprite_reg[(addr - 0x5120) as usize] = val;
+            }
+            0x5128..=0x512B => {
+                self.chr_bg_reg[(addr - 0x5128) as usize] = val;
+            }
+            0x5130 => self.chr_upper_bits = val & 0x03,
+            0x5203 => self.irq_scanline = val,
+            0x5204 => {
+                self.irq_enable = (val & 0x80) != 0;
+                self.irq_status &= !0x80;
+                self.irq_pending_flag = false;
+            }
+            0x5205 => {
+                self.mul_a = val;
+                self.mul_result = u16::from(self.mul_a) * u16::from(self.mul_b);
+            }
+            0x5206 => {
+                self.mul_b = val;
+                self.mul_result = u16::from(self.mul_a) * u16::from(self.mul_b);
+            }
+            0x5C00..=0x5FFF => {
+                // ExRAM write: available in modes 0, 1, and 2.
+                // Mode 3 is read-only; writes are ignored.
+                if self.ex_ram_mode < 3 {
+                    self.ex_ram[(addr & 0x03FF) as usize] = val;
+                }
+            }
+            0x6000..=0x7FFF if !self.prg_ram_is_protected() => {
+                // PRG RAM write (if not protected)
+                let bank = (self.prg_ram_bank as usize & 0x07) * 0x2000;
+                let offset = (addr & 0x1FFF) as usize;
+                let ram_size = self.prg_ram.len();
+                self.prg_ram[(bank + offset) % ram_size] = val;
+            }
+            _ => {}
+        }
+    }
+
+    fn ppu_read(&mut self, addr: u16) -> u8 {
+        let addr = addr & 0x3FFF;
+        if addr >= 0x2000 {
+            return 0; // Nametable reads handled by nt_read_ext
+        }
+        if self.has_chr_ram {
+            return self.chr[addr as usize];
+        }
+        if self.chr.is_empty() {
+            return 0;
+        }
+
+        let upper = u16::from(self.chr_upper_bits) << 8;
+        let slot = (addr >> 10) & 0x07;
+        let bg_slot = (addr >> 10) & 0x03;
+        let bg_fetch = self.chr_fetch_bg;
+
+        // ExRAM mode 1: extended attribute mode
+        // Each background tile can select its own 4KB CHR page via ExRAM
+        if bg_fetch && self.ex_ram_mode == 1 {
+            let bank = (u16::from(self.extended_chr_bank & 0x3F) << 2) + bg_slot;
+            let idx = self.map_chr_1k(bank, addr);
+            return self.chr[idx];
+        }
+
+        let bank = self.resolve_chr_bank(slot, bg_slot, bg_fetch, upper);
         let idx = self.map_chr_1k(bank, addr);
         self.chr[idx]
     }
@@ -400,11 +401,7 @@ impl MapperImpl for Mmc5 {
         let nt2 = (self.nt_mapping_reg >> 4) & 0x03;
         let nt3 = (self.nt_mapping_reg >> 6) & 0x03;
 
-        if nt0 == 0 && nt1 == 1 && nt2 == 0 && nt3 == 1 {
-            1 // vertical
-        } else {
-            0 // horizontal (and everything else)
-        }
+        u8::from(nt0 == 0 && nt1 == 1 && nt2 == 0 && nt3 == 1) // 1 = vertical, 0 = horizontal
     }
 
     fn irq_pending(&self) -> bool {

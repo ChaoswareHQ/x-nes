@@ -269,9 +269,18 @@ fn print_result_table(results: &[TestResult]) {
     }
 
     for (sys, sys_results) in &groups {
-        let pass = sys_results.iter().filter(|r| r.status == TestStatus::Pass).count();
-        let fail = sys_results.iter().filter(|r| matches!(r.status, TestStatus::Fail(_))).count();
-        let skip = sys_results.iter().filter(|r| r.status == TestStatus::Skip).count();
+        let pass = sys_results
+            .iter()
+            .filter(|r| r.status == TestStatus::Pass)
+            .count();
+        let fail = sys_results
+            .iter()
+            .filter(|r| matches!(r.status, TestStatus::Fail(_)))
+            .count();
+        let skip = sys_results
+            .iter()
+            .filter(|r| r.status == TestStatus::Skip)
+            .count();
 
         println!("  ┌─ {sys} ─────────────────────────────────────");
         println!("  │  {pass} passed, {fail} failed, {skip} skipped");
@@ -284,7 +293,10 @@ fn print_result_table(results: &[TestResult]) {
             };
             match &r.status {
                 TestStatus::Fail(err) => {
-                    println!("  │   {marker} ${:04X} {:<32} FAIL  err={err}", r.addr, r.name);
+                    println!(
+                        "  │   {marker} ${:04X} {:<32} FAIL  err={err}",
+                        r.addr, r.name
+                    );
                 }
                 TestStatus::Skip => {
                     println!("  │   {marker} ${:04X} {:<32} SKIP", r.addr, r.name);
@@ -296,9 +308,18 @@ fn print_result_table(results: &[TestResult]) {
 }
 
 fn print_summary(results: &[TestResult], elapsed: std::time::Duration, frames: u32, cycles: u64) {
-    let pass = results.iter().filter(|r| r.status == TestStatus::Pass).count();
-    let fail = results.iter().filter(|r| matches!(r.status, TestStatus::Fail(_))).count();
-    let skip = results.iter().filter(|r| r.status == TestStatus::Skip).count();
+    let pass = results
+        .iter()
+        .filter(|r| r.status == TestStatus::Pass)
+        .count();
+    let fail = results
+        .iter()
+        .filter(|r| matches!(r.status, TestStatus::Fail(_)))
+        .count();
+    let skip = results
+        .iter()
+        .filter(|r| r.status == TestStatus::Skip)
+        .count();
 
     println!();
     println!("══════════════════════════════════════════════════");
@@ -307,7 +328,10 @@ fn print_summary(results: &[TestResult], elapsed: std::time::Duration, frames: u
     println!("  Duration:  {elapsed:.2?}");
     println!("  Frames:    {frames}");
     println!("  Cycles:    {cycles}");
-    println!("  µs/frame:  {:.1}", elapsed.as_secs_f64() * 1_000_000.0 / frames as f64);
+    println!(
+        "  µs/frame:  {:.1}",
+        elapsed.as_secs_f64() * 1_000_000.0 / frames as f64
+    );
     println!("  cycles/f:  {:.0}", cycles as f64 / frames as f64);
     println!();
     println!("  {pass:>3}  PASS");
@@ -353,7 +377,10 @@ fn debug_state_label(val: u8) -> &'static str {
 #[test]
 fn accuracy_coin_memory_map() {
     let rom_path = Path::new("tests/accuracy_coin.nes");
-    assert!(rom_path.exists(), "ROM file not found — download accuracy_coin.nes");
+    assert!(
+        rom_path.exists(),
+        "ROM file not found — download accuracy_coin.nes"
+    );
 
     let data = fs::read(rom_path).unwrap();
     let rom = Rom::new(&data).expect("valid iNES ROM");
@@ -384,15 +411,21 @@ fn accuracy_coin_boots_to_menu() {
     let debug = runner.read_ram(0xEC);
     let magic = runner.read_ram(0x3F0);
 
-    println!("Boot path (Debug $EC): ${:02X} — {}", debug, debug_state_label(debug));
+    println!(
+        "Boot path (Debug $EC): ${:02X} — {}",
+        debug,
+        debug_state_label(debug)
+    );
     println!("Magic $3F0: ${:02X}", magic);
     println!("Frames to boot: {} / {max_frames}", runner.total_frames);
     println!("Elapsed: {:.2?}", start.elapsed());
 
     assert_eq!(
-        debug, 0x0A,
+        debug,
+        0x0A,
         "ROM didn't reach main menu (got ${:02X} = {})",
-        debug, debug_state_label(debug)
+        debug,
+        debug_state_label(debug)
     );
     assert_eq!(magic, 0x5A, "Power-on magic signature not set");
 }
@@ -412,19 +445,27 @@ fn accuracy_coin_run_all_tests() {
     runner.run_frames(1000);
     let debug = runner.read_ram(0xEC);
     assert_eq!(
-        debug, 0x0A,
+        debug,
+        0x0A,
         "ROM didn't reach main menu after 1000 frames (Debug $EC = ${:02X} = {})",
-        debug, debug_state_label(debug)
+        debug,
+        debug_state_label(debug)
     );
     let boot_elapsed = start.elapsed();
-    println!("[Phase 1] Booted to menu — {} frames, {boot_elapsed:.2?}", runner.total_frames);
+    println!(
+        "[Phase 1] Booted to menu — {} frames, {boot_elapsed:.2?}",
+        runner.total_frames
+    );
 
     // -- Phase 2: Run all tests -----------------------------------------------
     runner.press_start();
     runner.run_frames(6000);
     runner.release_start();
     let run_elapsed = start.elapsed().saturating_sub(boot_elapsed);
-    println!("[Phase 2] Test run complete — {} additional frames, {run_elapsed:.2?}", 6000);
+    println!(
+        "[Phase 2] Test run complete — {} additional frames, {run_elapsed:.2?}",
+        6000
+    );
 
     // -- Phase 3: Collect and report results ----------------------------------
     let results = runner.collect_results();
@@ -434,14 +475,25 @@ fn accuracy_coin_run_all_tests() {
     println!();
     println!("── Results by subsystem ──");
     print_result_table(&results);
-    print_summary(&results, total_elapsed, runner.total_frames, runner.total_cycles);
+    print_summary(
+        &results,
+        total_elapsed,
+        runner.total_frames,
+        runner.total_cycles,
+    );
 
     // -- Assert ---------------------------------------------------------------
     // If NO results at all, something went wrong.
-    assert!(total > 0, "No test results recorded — ROM may not have run the tests");
+    assert!(
+        total > 0,
+        "No test results recorded — ROM may not have run the tests"
+    );
 
     // Collect failures.
-    let fails: Vec<&TestResult> = results.iter().filter(|r| matches!(r.status, TestStatus::Fail(_))).collect();
+    let fails: Vec<&TestResult> = results
+        .iter()
+        .filter(|r| matches!(r.status, TestStatus::Fail(_)))
+        .collect();
 
     // Skip-check: if tests are skipped because they don't apply (e.g. PAL-only features on NTSC),
     // that's fine. But if expected tests are silent (val == 0), we only warn.
@@ -450,7 +502,9 @@ fn accuracy_coin_run_all_tests() {
     });
 
     if skip_critical {
-        println!("WARNING: CPU Instructions test was SKIPPED (value may still be zero at read time)");
+        println!(
+            "WARNING: CPU Instructions test was SKIPPED (value may still be zero at read time)"
+        );
     }
 
     if !fails.is_empty() {
@@ -508,9 +562,15 @@ fn accuracy_coin_run_cpu_suite() {
         let status = TestStatus::from_val(val);
         let name = test_name(addr);
         let marker = match status {
-            TestStatus::Pass => { pass += 1; "✓" }
-            TestStatus::Fail(_) => { fail += 1; "✗" }
-            TestStatus::Skip => "‒"
+            TestStatus::Pass => {
+                pass += 1;
+                "✓"
+            }
+            TestStatus::Fail(_) => {
+                fail += 1;
+                "✗"
+            }
+            TestStatus::Skip => "‒",
         };
         if let TestStatus::Fail(err) = status {
             println!("  {marker} ${addr:04X} {name:<30} FAIL  err={err}  (val=${val:02X})");
@@ -521,10 +581,7 @@ fn accuracy_coin_run_cpu_suite() {
         pass > 0 || fail > 0,
         "No CPU baseline test results at all — menu navigation may have failed"
     );
-    assert_eq!(
-        fail, 0,
-        "{fail} CPU baseline test(s) failed (see above)"
-    );
+    assert_eq!(fail, 0, "{fail} CPU baseline test(s) failed (see above)");
     println!("  ✓ {pass} passed, {fail} failed");
 }
 
@@ -538,12 +595,12 @@ fn accuracy_coin_boot_state() {
     let mut runner = AccuracyCoinRunner::new(rom_path);
     runner.run_frames(30);
 
-    let power_a  = runner.read_ram(0x370);
-    let power_x  = runner.read_ram(0x371);
-    let power_y  = runner.read_ram(0x372);
+    let power_a = runner.read_ram(0x370);
+    let power_x = runner.read_ram(0x371);
+    let power_y = runner.read_ram(0x372);
     let power_sp = runner.read_ram(0x373);
     let power_p_reg = runner.read_ram(0x374);
-    let ppu_rs   = runner.read_ram(0x360);
+    let ppu_rs = runner.read_ram(0x360);
 
     println!("Power-On State  (time: {:.2?})", start.elapsed());
     println!("  A  = ${power_a:02X}");

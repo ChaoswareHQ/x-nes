@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use super::MapperImpl;
+use alloc::vec::Vec;
 
 pub struct Gxrom {
     prg: Vec<u8>,
@@ -14,7 +14,11 @@ impl Gxrom {
     pub fn new(prg: &[u8], chr: &[u8], chr_ram: bool, mirror: u8) -> Self {
         Self {
             prg: prg.to_vec(),
-            chr: if chr_ram { alloc::vec![0u8; 0x2000] } else { chr.to_vec() },
+            chr: if chr_ram {
+                alloc::vec![0u8; 0x2000]
+            } else {
+                chr.to_vec()
+            },
             chr_ram,
             mirror,
             prg_bank: 0,
@@ -44,8 +48,12 @@ impl MapperImpl for Gxrom {
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
         let a = addr & 0x3FFF;
-        if a >= 0x2000 { return 0; }
-        if self.chr.is_empty() { return 0; }
+        if a >= 0x2000 {
+            return 0;
+        }
+        if self.chr.is_empty() {
+            return 0;
+        }
         let bank = self.chr_bank as usize;
         self.chr[(bank * 0x2000 + a as usize) % self.chr.len()]
     }
@@ -57,8 +65,14 @@ impl MapperImpl for Gxrom {
         }
     }
 
-    fn mirroring(&self) -> u8 { self.mirror }
-    fn irq_pending(&self) -> bool { false }
+    fn mirroring(&self) -> u8 {
+        self.mirror
+    }
+    fn irq_pending(&self) -> bool {
+        false
+    }
     fn ack_irq(&mut self) {}
-    fn has_chr_ram(&self) -> bool { self.chr_ram }
+    fn has_chr_ram(&self) -> bool {
+        self.chr_ram
+    }
 }

@@ -28,26 +28,26 @@ pub trait MapperImpl {
 
     /// Returns the nametable mapping register value.
     /// 0xFF = standard mirroring (use `mirroring()`).
-    /// Otherwise, each 2-bit pair maps NT0-3 to source (0=CIRAM_A, 1=CIRAM_B, 2=ExRAM, 3=Fill).
+    /// Otherwise, each 2-bit pair maps NT0-3 to source (0=`CIRAM_A`, 1=`CIRAM_B`, 2=`ExRAM`, 3=Fill).
     fn nt_mapping(&self) -> u8 {
         0xFF
     }
 
-    /// Read from a non-CIRAM nametable source (ExRAM or fill mode).
+    /// Read from a non-CIRAM nametable source (`ExRAM` or fill mode).
     fn read_nt_ext(&mut self, _addr: u16, _nt_source: u8) -> u8 {
         0
     }
 
-    /// Write to a non-CIRAM nametable source (ExRAM).
+    /// Write to a non-CIRAM nametable source (`ExRAM`).
     fn write_nt_ext(&mut self, _addr: u16, _nt_source: u8, _val: u8) {}
 
-    /// Set CHR fetch mode to background (for ExRAM mode 1).
+    /// Set CHR fetch mode to background (for `ExRAM` mode 1).
     fn set_chr_fetch_bg(&mut self) {}
 
-    /// Set CHR fetch mode to sprite (for ExRAM mode 1).
+    /// Set CHR fetch mode to sprite (for `ExRAM` mode 1).
     fn set_chr_fetch_sprite(&mut self) {}
 
-    /// Set the extended CHR bank from ExRAM byte (for ExRAM mode 1).
+    /// Set the extended CHR bank from `ExRAM` byte (for `ExRAM` mode 1).
     fn set_extended_chr_bank(&mut self, _bank: u8) {}
 
     /// Get the extended CHR bank.
@@ -55,7 +55,7 @@ pub trait MapperImpl {
         0
     }
 
-    /// Get the ExRAM mode.
+    /// Get the `ExRAM` mode.
     fn get_ex_ram_mode(&self) -> u8 {
         0
     }
@@ -70,7 +70,7 @@ pub trait MapperImpl {
         0
     }
 
-    /// Read a byte from ExRAM at the given offset.
+    /// Read a byte from `ExRAM` at the given offset.
     fn read_ex_ram_byte(&mut self, _offset: u16) -> u8 {
         0
     }
@@ -255,9 +255,8 @@ impl Mapper {
     }
 
     pub fn notify_scanline(&mut self, scanline: u16) {
-        match self {
-            Self::Mmc5(m) => m.notify_scanline(scanline),
-            _ => {}
+        if let Self::Mmc5(m) = self {
+            m.notify_scanline(scanline);
         }
     }
 
@@ -276,30 +275,26 @@ impl Mapper {
     }
 
     pub fn write_nt_ext(&mut self, addr: u16, nt_source: u8, val: u8) {
-        match self {
-            Self::Mmc5(m) => m.write_nt_ext(addr, nt_source, val),
-            _ => {}
+        if let Self::Mmc5(m) = self {
+            m.write_nt_ext(addr, nt_source, val);
         }
     }
 
     pub fn set_chr_fetch_bg(&mut self) {
-        match self {
-            Self::Mmc5(m) => m.set_chr_fetch_bg(),
-            _ => {}
+        if let Self::Mmc5(m) = self {
+            m.set_chr_fetch_bg();
         }
     }
 
     pub fn set_chr_fetch_sprite(&mut self) {
-        match self {
-            Self::Mmc5(m) => m.set_chr_fetch_sprite(),
-            _ => {}
+        if let Self::Mmc5(m) = self {
+            m.set_chr_fetch_sprite();
         }
     }
 
     pub fn set_extended_chr_bank(&mut self, bank: u8) {
-        match self {
-            Self::Mmc5(m) => m.set_extended_chr_bank(bank),
-            _ => {}
+        if let Self::Mmc5(m) = self {
+            m.set_extended_chr_bank(bank);
         }
     }
 

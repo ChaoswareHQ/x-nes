@@ -17,6 +17,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu
+          components: rustfmt
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -25,13 +26,19 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}-${{ steps.toolchain.outputs.cachekey }}
+
+      - name: Check formatting
+        run: cargo fmt --check
 
       - name: Build
         run: cargo build --release
 
       - name: Clippy
         run: cargo clippy --release -- -D warnings
+
+      - name: Run unit tests
+        run: cargo test --lib --release
 
   tests:
     name: ROM accuracy tests
@@ -53,7 +60,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}-${{ steps.toolchain.outputs.cachekey }}
 
       - name: Install system deps (for dev-dependencies)
         run: |
@@ -63,29 +70,33 @@ jobs:
             libxkbcommon-dev libwayland-dev \
             libx11-dev libxcursor-dev libxrandr-dev libxi-dev
 
-      - name: Run ROM tests with grade output
-        run: |
-          cargo test --release -- --nocapture 2>&1 | tee test_output.log
+      - name: Run AccuracyCoin test
+        run: cargo test --release --test accuracy_coin -- --nocapture 2>&1 | tee test_output.log
 
       - name: Extract AccuracyCoin grade
         id: grade
         run: |
           echo "=== ACCURACYCOIN GRADE ==="
-          grep -A 20 "AccuracyCoin Test Results" test_output.log | grep -v "Debug RAM" | grep -v "^--" || echo "Grade not found"
+          grep -A 10 "AccuracyCoin Test Summary" test_output.log || echo "Summary not found"
           echo ""
-          echo "=== BLARGG TEST SUMMARY ==="
-          grep -E "^  (PASS|FAIL|\?)" test_output.log || echo "(no blargg results)"
 
-          # Parse PASS count and calculate percentage
-          # Only match lines like "  PASS: 120" (pure number), not blargg lines like "  PASS: palette_ram (54 frames)"
-          PASS=$(grep -E '^  PASS: [0-9]+$' test_output.log | grep -oP '\d+$')
-          TOTAL=$(grep -E '^  TOTAL: [0-9]+$' test_output.log | grep -oP '\d+$')
-          if [ -n "$TOTAL" ] && [ "$TOTAL" -gt 0 ]; then
+          # Parse PASS/TOTAL from current output format:
+          #    86  PASS
+          #    55  FAIL
+          #     0  SKIP
+          #   ─────
+          #   141  TOTAL
+          PASS=$(grep -oP '^\s+\K\d+(?=\s+PASS)' test_output.log || echo "0")
+          TOTAL=$(grep -oP '^\s+\K\d+(?=\s+TOTAL)' test_output.log || echo "0")
+          if [ "$TOTAL" -gt 0 ] 2>/dev/null; then
             PCT=$((PASS * 100 / TOTAL))
             echo "pass=$PASS" >> $GITHUB_OUTPUT
             echo "total=$TOTAL" >> $GITHUB_OUTPUT
             echo "score=${PASS}/${TOTAL}" >> $GITHUB_OUTPUT
             echo "Computed: $PASS / $TOTAL = ${PCT}%"
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "## AccuracyCoin Results" >> $GITHUB_STEP_SUMMARY
+            grep -A 10 "AccuracyCoin Test Summary" test_output.log >> $GITHUB_STEP_SUMMARY || true
           else
             echo "pass=0" >> $GITHUB_OUTPUT
             echo "total=0" >> $GITHUB_OUTPUT
@@ -98,8 +109,8 @@ jobs:
         run: |
           SCORE="${{ steps.grade.outputs.score }}"
           echo "Updating README accuracy score to $SCORE"
-          sed -i "s|passes \*\*[0-9]*/\?[0-9]*\*\* of the AccuracyCoin|passes **${SCORE}** of the AccuracyCoin|g" README.md
-          grep "AccuracyCoin" README.md
+          sed -Ei 's|passes \*\*[0-9]+/[0-9]+\*\*|passes **'"$SCORE"'**|g' README.md
+          grep -o "passes \*\*[0-9]\+/[0-9]\+\*\*" README.md || echo "Badge pattern not found"
 
       - name: Commit updated score
         if: github.ref == 'refs/heads/main' && steps.grade.outputs.score != '0/0'
@@ -147,6 +158,21 @@ jobs:
 
       - name: Build book
         run: mdbook build docs/
+
+      - name: Check for broken internal links
+        run: |
+          echo "=== Checking for files referenced in SUMMARY.md that don't exist ==="
+          while IFS= read -r line; do
+            FILE=$(echo "$line" | grep -oP '(?<=]\()\.?/?[^)]+\.md')
+            if [ -n "$FILE" ]; then
+              FILE_PATH="docs/src/$FILE"
+              if [ ! -f "$FILE_PATH" ]; then
+                echo "MISSING: $FILE_PATH (referenced in SUMMARY.md)"
+                exit 1
+              fi
+            fi
+          done < docs/src/SUMMARY.md
+          echo "All referenced files exist"
 
       - name: Setup Pages
         if: github.ref == 'refs/heads/main'

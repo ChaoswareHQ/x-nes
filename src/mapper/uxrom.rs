@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use super::MapperImpl;
+use alloc::vec::Vec;
 
 pub struct UxRom {
     prg: Vec<u8>,

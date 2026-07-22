@@ -38,30 +38,57 @@ impl Ppu {
         //   bits 6-7: palette (replaces attribute table)
         let ex_ram_mode = mapper.get_ex_ram_mode();
         if ex_ram_mode == 1 {
-            let exram_offset = nt_addr & 0x03FF;
-            let exram_byte = mapper.read_ex_ram_byte(exram_offset);
-            mapper.set_extended_chr_bank(exram_byte);
-            mapper.set_chr_fetch_bg();
-
-            let tile_addr = ((tile_index as u16) << 4) | pixel_y;
-            let low = mapper.ppu_read(tile_addr);
-            let high = mapper.ppu_read(tile_addr | 0x0008);
-
-            let shift = 7 - pixel_x;
-            let pixel = ((high >> shift) & 1) << 1 | ((low >> shift) & 1);
-
-            if pixel == 0 {
-                return (0, self.palette[0]);
-            }
-            // ExRAM mode 1: palette comes from ExRAM bits 6-7, not attribute table
-            let pal_group = (exram_byte >> 6) & 3;
-            return (
-                pixel,
-                self.palette[((pal_group as usize) << 2) | pixel as usize],
-            );
+            self.compute_bg_pixel_exram_mode1(nt_addr, tile_index, pixel_x, pixel_y, mapper)
+        } else {
+            self.compute_bg_pixel_standard(
+                tile_index, pixel_x, pixel_y, nt_base, tile_x, tile_y, mapper,
+            )
         }
+    }
 
-        // Standard rendering path
+    #[allow(clippy::too_many_arguments)]
+    fn compute_bg_pixel_exram_mode1(
+        &self,
+        nt_addr: u16,
+        tile_index: u8,
+        pixel_x: u16,
+        pixel_y: u16,
+        mapper: &mut Mapper,
+    ) -> (u8, u8) {
+        let exram_offset = nt_addr & 0x03FF;
+        let exram_byte = mapper.read_ex_ram_byte(exram_offset);
+        mapper.set_extended_chr_bank(exram_byte);
+        mapper.set_chr_fetch_bg();
+
+        let tile_addr = ((tile_index as u16) << 4) | pixel_y;
+        let low = mapper.ppu_read(tile_addr);
+        let high = mapper.ppu_read(tile_addr | 0x0008);
+
+        let shift = 7 - pixel_x;
+        let pixel = ((high >> shift) & 1) << 1 | ((low >> shift) & 1);
+
+        if pixel == 0 {
+            return (0, self.palette[0]);
+        }
+        // ExRAM mode 1: palette comes from ExRAM bits 6-7, not attribute table
+        let pal_group = (exram_byte >> 6) & 3;
+        (
+            pixel,
+            self.palette[((pal_group as usize) << 2) | pixel as usize],
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn compute_bg_pixel_standard(
+        &mut self,
+        tile_index: u8,
+        pixel_x: u16,
+        pixel_y: u16,
+        nt_base: u16,
+        tile_x: u16,
+        tile_y: u16,
+        mapper: &mut Mapper,
+    ) -> (u8, u8) {
         mapper.set_chr_fetch_bg();
         let bg_table = if self.ctrl & 0x10 != 0 {
             0x1000
@@ -90,7 +117,7 @@ impl Ppu {
     }
 
     fn render_sprite_pixel(
-        &mut self,
+        &self,
         x: u16,
         bg_pixel: u8,
         bg_color: u8,
@@ -226,7 +253,7 @@ impl Ppu {
                 }
             } else {
                 // Dummy sprite fetch: tile $FF from sprite pattern table
-                ((self.ctrl & 0x08 != 0) as u16) * 0x1000 | (0xFFu16 << 4)
+                (((self.ctrl & 0x08 != 0) as u16) * 0x1000) | (0xFFu16 << 4)
             };
             self.chr_read(tile_addr, mapper);
             self.chr_read(tile_addr | 8, mapper);

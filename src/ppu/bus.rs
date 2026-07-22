@@ -7,18 +7,18 @@ impl Ppu {
     /// Uses either the mapper's custom NT mapping (MMC5) or standard mirroring.
     fn nt_index(addr: u16, mirroring: u8, nt_mapping: u8) -> (u8, u16) {
         let a = addr & 0x3FFF;
-        if nt_mapping != 0xFF {
-            // MMC5-style: 2 bits per NT (NT0 in bits 1-0, NT1 in bits 3-2, etc.)
-            let nt = ((a >> 10) & 3) as u8;
-            let source = (nt_mapping >> (nt * 2)) & 0x03;
-            (source, a & 0x03FF)
-        } else {
+        if nt_mapping == 0xFF {
             // Standard mirroring
             let (nt, off) = match mirroring {
                 0 => (((a >> 11) & 1) as u8, a & 0x03FF),
                 _ => (((a >> 10) & 1) as u8, a & 0x03FF),
             };
             (nt, off)
+        } else {
+            // MMC5-style: 2 bits per NT (NT0 in bits 1-0, NT1 in bits 3-2, etc.)
+            let nt = ((a >> 10) & 3) as u8;
+            let source = (nt_mapping >> (nt * 2)) & 0x03;
+            (source, a & 0x03FF)
         }
     }
 
