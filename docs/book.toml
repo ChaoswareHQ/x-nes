@@ -11,9 +11,7 @@ no-section-label = true
 git-repository-url = "https://github.com/ChaoswareHQ/x-nes"
 edit-url-template = "https://github.com/ChaoswareHQ/x-nes/edit/main/docs/src/{path}"
 
-[output.html.fold]
-enable = true
-level = 0
+
 
 [rust]
 edition = "2024"
