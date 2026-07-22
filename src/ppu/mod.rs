@@ -241,7 +241,7 @@ impl Ppu {
     // -----------------------------------------------------------------------
 
     /// Advance to the next scanline. Called when cy exceeds 339.
-    fn advance_scanline(&mut self) {
+    fn advance_scanline(&mut self, mapper: &mut Mapper) {
         self.cycle = 0;
         let ns = self.scanline.wrapping_add(1);
         if ns >= TOTAL_SCANLINES {
@@ -251,6 +251,8 @@ impl Ppu {
         } else {
             self.scanline = ns;
         }
+        // Notify mapper of scanline change (MMC5 scanline IRQ)
+        mapper.notify_scanline(self.scanline);
         // Cycle 0 of prerender scanline: vertical scroll copy, reset sprite hit
         if self.scanline == PRERENDER_SCANLINE {
             self.sprite_zero_hit_possible = true;
@@ -266,7 +268,7 @@ impl Ppu {
     /// Handle the NES PPU odd-frame cycle skip.
     /// On odd frames with rendering enabled, the prerender scanline has 340 cycles
     /// instead of 341. Cycle 340 is skipped.
-    fn handle_odd_frame_skip(&mut self) -> bool {
+    fn handle_odd_frame_skip(&mut self, mapper: &mut Mapper) -> bool {
         if self.scanline == PRERENDER_SCANLINE
             && self.cycle == CYCLES_PER_LINE - 1 // 340
             && self.odd_frame
@@ -277,6 +279,7 @@ impl Ppu {
             self.odd_frame = !self.odd_frame;
             self.frame_complete = true;
             self.sprite_zero_hit_possible = true;
+            mapper.notify_scanline(0);
             return true;
         }
         false
@@ -371,6 +374,11 @@ impl Ppu {
     pub fn tick(&mut self, mapper: &mut Mapper) {
         self.tick_count += 1;
 
+        // Notify mapper on the very first tick (scanline 0 initial state)
+        if self.tick_count == 1 {
+            mapper.notify_scanline(0);
+        }
+
         // Increment A12 low-cycle counter (for MMC3 scanline IRQ)
         if !self.prev_a12 && self.a12_low_cycles < 255 {
             self.a12_low_cycles += 1;
@@ -381,13 +389,13 @@ impl Ppu {
 
         // --- Phase 1: End-of-line scanline advance ---
         if cy > CYCLES_PER_LINE - 2 {
-            self.advance_scanline();
+            self.advance_scanline(mapper);
             return;
         }
         self.cycle += 1;
 
         // --- Phase 2: Odd frame skip (happens at cycle 340 on prerender) ---
-        if self.handle_odd_frame_skip() {
+        if self.handle_odd_frame_skip(mapper) {
             return;
         }
 

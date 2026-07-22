@@ -17,9 +17,9 @@ A lightweight, cycle-accurate NES emulator **library** written in Rust, designed
 
 > **Beta.** The core emulation is solid for many games, but there are known issues:
 >
-> - **Audio** — timing is slightly fast, some tones are off. APU is functional but needs refinement.
+> - **Audio** — functional but timing is slightly fast, some tones are off. APU has all 5 channels but needs refinement.
 > - **Graphics** — some games render incorrectly; edge-case PPU behaviors are still being ironed out.
-> - **MMC3 mapper** (used by Super Mario Bros. 3, Mega Man 3, etc.) — **not yet supported.** Currently implements NROM, UxROM, CNROM, AxROM, GxROM, and MMC1.
+> - **Mappers** — 8 mappers implemented: NROM, MMC1, UxROM, CNROM, MMC3, MMC5, AxROM, GxROM. Covers ~90% of the NES library.
 > - **Accuracy** — passes **86/141** of the AccuracyCoin test suite (61%). Blargg tests: **20/21 pass** (ppu_vbl_nmi fails on NMI timing subtest 5).
 >
 > **AccuracyCoin failures by area:**
@@ -146,7 +146,7 @@ end
 | `ppu` | Picture Processing Unit with scanline timing and sprite evaluation |
 | `apu` | Audio Processing Unit (pulse channels, sample buffer) |
 | `rom` | iNES ROM header parser and mapper dispatch |
-| `mapper` | Mapper implementations (NROM, UxROM, CNROM, AxROM, GxROM, MMC1) |
+| `mapper` | Mapper implementations (NROM, UxROM, CNROM, AxROM, GxROM, MMC1, MMC3, MMC5) |
 | `ffi` | Optional C-compatible API (enabled by `ffi` feature) |
 | `clock` | Master clock cycle conversions |
 | `interrupt` | Vector address constants (NMI, RESET, IRQ) |
@@ -154,13 +154,14 @@ end
 
 ## Roadmap
 
-- [x] Cycle-accurate CPU + official instructions
-- [x] PPU scanline rendering + NMI
-- [x] APU (basic timing, pulse channels)
-- [x] iNES ROM parser + NROM, UxROM, CNROM, AxROM, GxROM, MMC1
-- [ ] MMC3 mapper (SMB3, Mega Man 3, etc.)
+- [x] Cycle-accurate CPU + official and unofficial instructions
+- [x] PPU on-the-fly rendering + NMI edge detection
+- [x] APU (all 5 channels: pulse 1/2, triangle, noise, DMC)
+- [x] iNES 1.0/2.0 ROM parser + 8 mappers (NROM, MMC1, UxROM, CNROM, MMC3, MMC5, AxROM, GxROM)
 - [ ] Audio accuracy refinements
-- [ ] PPU edge-case fixes (sprite evaluation corner cases)
+- [ ] PPU edge-case fixes (sprite evaluation corner cases, OAM corruption)
+- [ ] Expansion audio (MMC5, VRC6, etc.)
+- [ ] Additional mappers (VRC series, FME-7, Namco 163)
 - [ ] RetroArch integration
 - [ ] WASM target support
 

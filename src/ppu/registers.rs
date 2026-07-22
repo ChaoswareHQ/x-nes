@@ -25,7 +25,7 @@ impl Ppu {
         let val = if addr < 0x2000 {
             self.chr_read(addr, mapper)
         } else {
-            self.ppu_read_nt(addr, mapper.mirroring())
+            self.ppu_read_nt(addr, mapper)
         };
         let result = if addr < 0x3F00 {
             self.data_buffer
@@ -36,7 +36,7 @@ impl Ppu {
         if addr < 0x3F00 {
             self.data_buffer = val;
         } else {
-            self.data_buffer = self.ppu_read_nt(addr & 0x2FFF, mapper.mirroring());
+            self.data_buffer = self.ppu_read_nt(addr & 0x2FFF, mapper);
         }
         // $2007 reads DO refresh the bus (unlike $2002)
         self.set_last_bus_value(result);
@@ -121,7 +121,7 @@ impl Ppu {
         if addr < 0x2000 {
             mapper.ppu_write(addr, val);
         } else {
-            self.ppu_write_nt(addr, val, mapper.mirroring());
+            self.ppu_write_nt(addr, val, mapper);
         }
         self.v = self
             .v
