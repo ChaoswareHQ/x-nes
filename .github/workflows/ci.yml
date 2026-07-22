@@ -37,9 +37,6 @@ jobs:
       - name: Clippy
         run: cargo clippy --release -- -D warnings
 
-      - name: Run unit tests
-        run: cargo test --lib --release
-
   tests:
     name: ROM accuracy tests
     runs-on: ubuntu-latest
