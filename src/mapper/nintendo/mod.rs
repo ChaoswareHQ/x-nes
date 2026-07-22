@@ -50,6 +50,6 @@ pub use self::mmc4::Mmc4;
 pub use self::mmc5::Mmc5;
 pub use self::nrom::Nrom;
 pub use self::tx_srom::TxSRom;
-pub use self::unrom_94::UnRom_94;
-pub use self::unrom_180::UnRom_180;
+pub use self::unrom_94::UnRom94;
+pub use self::unrom_180::UnRom180;
 pub use self::uxrom::UxRom;

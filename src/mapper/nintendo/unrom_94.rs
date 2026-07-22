@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 /// - Fixed 16 KB bank at $C000 (last bank)
 /// - Mirroring controlled via bit 6 of the bank register
 /// - No CHR banking
-pub struct UnRom_94 {
+pub struct UnRom94 {
     prg: Vec<u8>,
     chr: Vec<u8>,
     #[allow(dead_code)]
@@ -18,7 +18,7 @@ pub struct UnRom_94 {
     bank: u8,
 }
 
-impl UnRom_94 {
+impl UnRom94 {
     pub fn new(prg: &[u8], chr: &[u8], chr_ram: bool, mirror: u8) -> Self {
         Self {
             prg: prg.to_vec(),
@@ -34,7 +34,7 @@ impl UnRom_94 {
     }
 }
 
-impl MapperImpl for UnRom_94 {
+impl MapperImpl for UnRom94 {
     fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
             0x8000..=0xBFFF => {

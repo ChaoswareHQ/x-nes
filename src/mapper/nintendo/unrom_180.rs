@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 ///   - $8000-$BFFF: selected bank (16 KB)
 ///   - $C000-$FFFF: fixed to last bank (16 KB)
 /// No CHR banking.
-pub struct UnRom_180 {
+pub struct UnRom180 {
     prg: Vec<u8>,
     chr: Vec<u8>,
     #[allow(dead_code)]
@@ -17,7 +17,7 @@ pub struct UnRom_180 {
     bank: u8,
 }
 
-impl UnRom_180 {
+impl UnRom180 {
     pub fn new(prg: &[u8], chr: &[u8], chr_ram: bool, mirror: u8) -> Self {
         Self {
             prg: prg.to_vec(),
@@ -33,7 +33,7 @@ impl UnRom_180 {
     }
 }
 
-impl MapperImpl for UnRom_180 {
+impl MapperImpl for UnRom180 {
     fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
             0x8000..=0xBFFF => {

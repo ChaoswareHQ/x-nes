@@ -58,7 +58,6 @@ impl Vrc7 {
             0xA010..=0xA01F => self.prg_banks[1] = val & 0x3F,
             0xC000 => self.prg_banks[2] = val & 0x3F,
             0xC010..=0xC01F => self.prg_banks[2] = val & 0x3F,
-            0xE000 => self.prg_banks[3] = val & 0x3F,
             0xE010..=0xE01F => self.prg_banks[3] = val & 0x3F,
 
             // CHR banks (1 KB each)
@@ -158,7 +157,7 @@ impl MapperImpl for Vrc7 {
 
         let bank_idx = (a as usize) / 0x0400;
         let offset = (a as usize) % 0x0400;
-        let bank = self.chr_banks[bank_idx % 8] as usize ;
+        let bank = self.chr_banks[bank_idx % 8] as usize;
         let idx = (bank * 0x0400 + offset) % self.chr.len();
         self.chr[idx]
     }
@@ -178,7 +177,7 @@ impl MapperImpl for Vrc7 {
             // CHR RAM write: direct addressing with banking
             let bank_idx = (a as usize) / 0x0400;
             let offset = (a as usize) % 0x0400;
-            let bank = self.chr_banks[bank_idx % 8] as usize ;
+            let bank = self.chr_banks[bank_idx % 8] as usize;
             let idx = (bank * 0x0400 + offset) % self.chr.len();
             self.chr[idx] = val;
         }

@@ -112,8 +112,8 @@ pub enum Mapper {
     Mmc1_105(Box<nintendo::Mmc1_105>),
     Mmc1_155(Box<nintendo::Mmc1_155>),
     TxSRom(Box<nintendo::TxSRom>),
-    UnRom_94(Box<nintendo::UnRom_94>),
-    UnRom_180(Box<nintendo::UnRom_180>),
+    UnRom94(Box<nintendo::UnRom94>),
+    UnRom180(Box<nintendo::UnRom180>),
     CnromProtect(Box<nintendo::CnromProtect>),
     // Konami
     Vrc1(Box<konami::Vrc1>),
@@ -383,7 +383,7 @@ impl Mapper {
             93 => Self::Sunsoft93(Box::new(sunsoft::Sunsoft93::new(
                 prg_data, chr_data, chr_ram, mirroring,
             ))),
-            94 => Self::UnRom_94(Box::new(nintendo::UnRom_94::new(
+            94 => Self::UnRom94(Box::new(nintendo::UnRom94::new(
                 prg_data, chr_data, chr_ram, mirroring,
             ))),
             95 => Self::Namco108(Box::new(namco::Namco108::new(
@@ -437,7 +437,7 @@ impl Mapper {
             174 => Self::Mapper174(Box::new(unlicensed::Mapper174::new(
                 prg_data, chr_data, chr_ram, mirroring,
             ))),
-            180 => Self::UnRom_180(Box::new(nintendo::UnRom_180::new(
+            180 => Self::UnRom180(Box::new(nintendo::UnRom180::new(
                 prg_data, chr_data, chr_ram, mirroring,
             ))),
             184 => Self::Sunsoft184(Box::new(sunsoft::Sunsoft184::new(
@@ -557,8 +557,8 @@ macro_rules! dispatch_mut {
             Self::Mmc1_105(m) => m.$method(),
             Self::Mmc1_155(m) => m.$method(),
             Self::TxSRom(m) => m.$method(),
-            Self::UnRom_94(m) => m.$method(),
-            Self::UnRom_180(m) => m.$method(),
+            Self::UnRom94(m) => m.$method(),
+            Self::UnRom180(m) => m.$method(),
             Self::CnromProtect(m) => m.$method(),
             Self::Vrc1(m) => m.$method(),
             Self::Vrc2_4(m) => m.$method(),
@@ -660,8 +660,8 @@ macro_rules! dispatch_mut {
             Self::Mmc1_105(m) => m.$method($arg1),
             Self::Mmc1_155(m) => m.$method($arg1),
             Self::TxSRom(m) => m.$method($arg1),
-            Self::UnRom_94(m) => m.$method($arg1),
-            Self::UnRom_180(m) => m.$method($arg1),
+            Self::UnRom94(m) => m.$method($arg1),
+            Self::UnRom180(m) => m.$method($arg1),
             Self::CnromProtect(m) => m.$method($arg1),
             Self::Vrc1(m) => m.$method($arg1),
             Self::Vrc2_4(m) => m.$method($arg1),
@@ -763,8 +763,8 @@ macro_rules! dispatch_mut {
             Self::Mmc1_105(m) => m.$method($arg1, $arg2),
             Self::Mmc1_155(m) => m.$method($arg1, $arg2),
             Self::TxSRom(m) => m.$method($arg1, $arg2),
-            Self::UnRom_94(m) => m.$method($arg1, $arg2),
-            Self::UnRom_180(m) => m.$method($arg1, $arg2),
+            Self::UnRom94(m) => m.$method($arg1, $arg2),
+            Self::UnRom180(m) => m.$method($arg1, $arg2),
             Self::CnromProtect(m) => m.$method($arg1, $arg2),
             Self::Vrc1(m) => m.$method($arg1, $arg2),
             Self::Vrc2_4(m) => m.$method($arg1, $arg2),
