@@ -61,6 +61,12 @@ impl Ppu {
     }
 
     pub fn write_mask(&mut self, val: u8) {
+        if val & 0x18 != 0 {
+            eprintln!(
+                "WRITE_MASK ${:02X} at sl={} cy={}",
+                val, self.scanline, self.cycle
+            );
+        }
         self.set_last_bus_value(val);
         self.mask = val;
     }

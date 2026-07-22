@@ -9,7 +9,6 @@
 
 A lightweight, cycle-accurate NES emulator **library** written in Rust, designed to run everywhere — from microcontrollers to modern desktops. Exposes a clean Rust API and a C-compatible FFI for use from Lua, C, or any other language.
 
-**[Read the Book](https://chaoswarehq.github.io/x-nes/)** — a complete walkthrough of the architecture, instruction set, PPU, and performance techniques.
 
 ---
 
@@ -19,7 +18,7 @@ A lightweight, cycle-accurate NES emulator **library** written in Rust, designed
 >
 > - **Audio** — functional but timing is slightly fast, some tones are off. APU has all 5 channels but needs refinement.
 > - **Graphics** — some games render incorrectly; edge-case PPU behaviors are still being ironed out.
-> - **Mappers** — 8 mappers implemented: NROM, MMC1, UxROM, CNROM, MMC3, MMC5, AxROM, GxROM. Covers ~90% of the NES library.
+> - **Mappers** — 10 mappers implemented: NROM, MMC1, UxROM, CNROM, MMC3, MMC5, MMC2 (Punch-Out!!), MMC4 (Fire Emblem), AxROM, GxROM. Covers ~95% of the NES library.
 > - **Accuracy** — passes **86/141** of the AccuracyCoin test suite (61%). Blargg tests: **20/21 pass** (ppu_vbl_nmi fails on NMI timing subtest 5).
 >
 > **AccuracyCoin failures by area:**
@@ -171,7 +170,7 @@ Contributions are welcome! This project aims to be the most accurate NES emulato
 
 - Open [issues](https://github.com/ChaoswareHQ/x-nes/issues) for bugs or feature requests
 - PRs are reviewed promptly
-- See the book for architecture docs before diving in
+
 
 ## Support
 

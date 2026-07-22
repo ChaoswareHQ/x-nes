@@ -6,7 +6,7 @@ edition = "2024"
 rust-version = "1.97.0"
 repository = "https://github.com/ChaoswareHQ/x-nes"
 homepage = "https://github.com/ChaoswareHQ/x-nes"
-documentation = "https://chaoswarehq.github.io/x-nes/"
+
 license = "MIT OR Apache-2.0"
 description = "A minimal NES emulator library written in Rust, targeting everything from microcontrollers to modern desktops."
 readme = "README.md"
@@ -17,7 +17,6 @@ exclude = [
     ".cargo/",
     ".github/",
     "clippy.toml",
-    "docs/",
     "fpga",
     "rust-toolchain.toml",
     "tests/*.nes",
@@ -38,6 +37,14 @@ crate-type = ["lib", "cdylib", "staticlib"]
 [[example]]
 name = "main"
 path = "examples/main.rs"
+
+[[example]]
+name = "romdump"
+path = "examples/romdump.rs"
+
+[[example]]
+name = "debug"
+path = "examples/debug.rs"
 
 [[example]]
 name = "window"

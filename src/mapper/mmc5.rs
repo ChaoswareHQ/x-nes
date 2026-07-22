@@ -9,47 +9,47 @@ pub struct Mmc5 {
     mirror: u8,
 
     // $5100 PRG mode (0-3)
-    prg_mode: u8,
+    pub prg_mode: u8,
     // $5101 CHR mode (0-3)
-    chr_mode: u8,
+    pub chr_mode: u8,
     // $5102 PRG RAM protect 1
-    prg_ram_protect1: u8,
+    pub prg_ram_protect1: u8,
     // $5103 PRG RAM protect 2
-    prg_ram_protect2: u8,
+    pub prg_ram_protect2: u8,
     // $5104 ExRAM mode (0-3)
-    ex_ram_mode: u8,
+    pub ex_ram_mode: u8,
     // $5105 Nametable mapping
-    nt_mapping_reg: u8,
+    pub nt_mapping_reg: u8,
     // $5106 Fill mode tile
-    fill_tile: u8,
+    pub fill_tile: u8,
     // $5107 Fill mode attribute
-    fill_attr: u8,
+    pub fill_attr: u8,
 
     // $5113 PRG RAM bank select
-    prg_ram_bank: u8,
+    pub prg_ram_bank: u8,
     // $5114-$5117 PRG bank registers (8KB each)
-    prg_reg: [u8; 4],
+    pub prg_reg: [u8; 4],
 
     // $5120-$5127 CHR sprite registers (1KB each)
-    chr_sprite_reg: [u8; 8],
+    pub chr_sprite_reg: [u8; 8],
     // $5128-$512B CHR background registers (1KB each)
-    chr_bg_reg: [u8; 4],
+    pub chr_bg_reg: [u8; 4],
     // $5130 CHR upper bits
-    chr_upper_bits: u8,
+    pub chr_upper_bits: u8,
 
     // ExRAM (1024 bytes)
-    ex_ram: [u8; 1024],
+    pub ex_ram: [u8; 1024],
 
     // $5205/$5206 Multiplier
-    mul_a: u8,
-    mul_b: u8,
-    mul_result: u16,
+    pub mul_a: u8,
+    pub mul_b: u8,
+    pub mul_result: u16,
 
     // $5203/$5204 IRQ
-    irq_scanline: u8,
-    irq_status: u8,
-    irq_enable: bool,
-    irq_pending_flag: bool,
+    pub irq_scanline: u8,
+    pub irq_status: u8,
+    pub irq_enable: bool,
+    pub irq_pending_flag: bool,
 
     // PRG RAM (8KB)
     prg_ram: [u8; 0x2000],

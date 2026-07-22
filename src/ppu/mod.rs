@@ -65,7 +65,7 @@ pub struct Ppu {
     pub v: u16, // current VRAM address (loopy-v)
     pub t: u16, // temporary VRAM address (loopy-t)
     pub fine_x: u8,
-    w: u8, // write toggle (0 = first write, 1 = second)
+    pub w: u8, // write toggle (0 = first write, 1 = second)
 
     // Data bus / open bus
     pub data_buffer: u8,
@@ -86,14 +86,14 @@ pub struct Ppu {
     //   nmi_deferred   = NMI from penultimate-cycle $2000 write (fires next instr)
     // -----------------------------------------------------------------------
     pub nmi_latched: bool,
-    nmi_output: bool,
+    pub nmi_output: bool,
     pub nmi_from_vblank: bool,
     pub nmi_deferred_pending: bool,
 
     // Frame tracking
     pub frame_complete: bool,
     pub frame: [u8; 61440],
-    odd_frame: bool,
+    pub odd_frame: bool,
 
     // Sprite evaluation state
     sprite_count: u8,
@@ -104,8 +104,8 @@ pub struct Ppu {
     vbl_suppressed: bool,
 
     // Stable scroll snapshots (used by on-the-fly renderer)
-    render_v: u16,
-    render_fine_x: u8,
+    pub render_v: u16,
+    pub render_fine_x: u8,
 
     // A12 edge tracking for mapper scanline counters (MMC3)
     prev_a12: bool,

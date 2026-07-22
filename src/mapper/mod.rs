@@ -4,7 +4,9 @@ pub mod axrom;
 pub mod cnrom;
 pub mod gxrom;
 pub mod mmc1;
+pub mod mmc2;
 pub mod mmc3;
+pub mod mmc4;
 pub mod mmc5;
 pub mod nrom;
 pub mod uxrom;
@@ -81,7 +83,9 @@ pub enum Mapper {
     UxRom(Box<uxrom::UxRom>),
     Cnrom(Box<cnrom::Cnrom>),
     Mmc1(Box<mmc1::Mmc1>),
+    Mmc2(Box<mmc2::Mmc2>),
     Mmc3(Box<mmc3::Mmc3>),
+    Mmc4(Box<mmc4::Mmc4>),
     Mmc5(Box<mmc5::Mmc5>),
     Axrom(Box<axrom::Axrom>),
     Gxrom(Box<gxrom::Gxrom>),
@@ -115,6 +119,12 @@ impl Mapper {
             7 => Self::Axrom(Box::new(axrom::Axrom::new(
                 prg_data, chr_data, chr_ram, mirroring,
             ))),
+            9 => Self::Mmc2(Box::new(mmc2::Mmc2::new(
+                prg_data, chr_data, chr_ram, mirroring,
+            ))),
+            10 => Self::Mmc4(Box::new(mmc4::Mmc4::new(
+                prg_data, chr_data, chr_ram, mirroring,
+            ))),
             66 => Self::Gxrom(Box::new(gxrom::Gxrom::new(
                 prg_data, chr_data, chr_ram, mirroring,
             ))),
@@ -131,7 +141,9 @@ impl Mapper {
             Self::UxRom(m) => m.cpu_read(addr),
             Self::Cnrom(m) => m.cpu_read(addr),
             Self::Mmc1(m) => m.cpu_read(addr),
+            Self::Mmc2(m) => m.cpu_read(addr),
             Self::Mmc3(m) => m.cpu_read(addr),
+            Self::Mmc4(m) => m.cpu_read(addr),
             Self::Mmc5(m) => m.cpu_read(addr),
             Self::Axrom(m) => m.cpu_read(addr),
             Self::Gxrom(m) => m.cpu_read(addr),
@@ -146,7 +158,9 @@ impl Mapper {
             Self::UxRom(m) => m.cpu_write(addr, val),
             Self::Cnrom(m) => m.cpu_write(addr, val),
             Self::Mmc1(m) => m.cpu_write(addr, val),
+            Self::Mmc2(m) => m.cpu_write(addr, val),
             Self::Mmc3(m) => m.cpu_write(addr, val),
+            Self::Mmc4(m) => m.cpu_write(addr, val),
             Self::Mmc5(m) => m.cpu_write(addr, val),
             Self::Axrom(m) => m.cpu_write(addr, val),
             Self::Gxrom(m) => m.cpu_write(addr, val),
@@ -161,7 +175,9 @@ impl Mapper {
             Self::UxRom(m) => m.ppu_read(addr),
             Self::Cnrom(m) => m.ppu_read(addr),
             Self::Mmc1(m) => m.ppu_read(addr),
+            Self::Mmc2(m) => m.ppu_read(addr),
             Self::Mmc3(m) => m.ppu_read(addr),
+            Self::Mmc4(m) => m.ppu_read(addr),
             Self::Mmc5(m) => m.ppu_read(addr),
             Self::Axrom(m) => m.ppu_read(addr),
             Self::Gxrom(m) => m.ppu_read(addr),
@@ -176,7 +192,9 @@ impl Mapper {
             Self::UxRom(m) => m.ppu_write(addr, val),
             Self::Cnrom(m) => m.ppu_write(addr, val),
             Self::Mmc1(m) => m.ppu_write(addr, val),
+            Self::Mmc2(m) => m.ppu_write(addr, val),
             Self::Mmc3(m) => m.ppu_write(addr, val),
+            Self::Mmc4(m) => m.ppu_write(addr, val),
             Self::Mmc5(m) => m.ppu_write(addr, val),
             Self::Axrom(m) => m.ppu_write(addr, val),
             Self::Gxrom(m) => m.ppu_write(addr, val),
@@ -190,7 +208,9 @@ impl Mapper {
             Self::UxRom(m) => m.mirroring(),
             Self::Cnrom(m) => m.mirroring(),
             Self::Mmc1(m) => m.mirroring(),
+            Self::Mmc2(m) => m.mirroring(),
             Self::Mmc3(m) => m.mirroring(),
+            Self::Mmc4(m) => m.mirroring(),
             Self::Mmc5(m) => m.mirroring(),
             Self::Axrom(m) => m.mirroring(),
             Self::Gxrom(m) => m.mirroring(),
@@ -204,7 +224,9 @@ impl Mapper {
             Self::UxRom(m) => m.irq_pending(),
             Self::Cnrom(m) => m.irq_pending(),
             Self::Mmc1(m) => m.irq_pending(),
+            Self::Mmc2(m) => m.irq_pending(),
             Self::Mmc3(m) => m.irq_pending(),
+            Self::Mmc4(m) => m.irq_pending(),
             Self::Mmc5(m) => m.irq_pending(),
             Self::Axrom(m) => m.irq_pending(),
             Self::Gxrom(m) => m.irq_pending(),
@@ -218,7 +240,9 @@ impl Mapper {
             Self::UxRom(m) => m.ack_irq(),
             Self::Cnrom(m) => m.ack_irq(),
             Self::Mmc1(m) => m.ack_irq(),
+            Self::Mmc2(m) => m.ack_irq(),
             Self::Mmc3(m) => m.ack_irq(),
+            Self::Mmc4(m) => m.ack_irq(),
             Self::Mmc5(m) => m.ack_irq(),
             Self::Axrom(m) => m.ack_irq(),
             Self::Gxrom(m) => m.ack_irq(),
@@ -232,7 +256,9 @@ impl Mapper {
             Self::UxRom(m) => m.clock_scanline(),
             Self::Cnrom(m) => m.clock_scanline(),
             Self::Mmc1(m) => m.clock_scanline(),
+            Self::Mmc2(m) => m.clock_scanline(),
             Self::Mmc3(m) => m.clock_scanline(),
+            Self::Mmc4(m) => m.clock_scanline(),
             Self::Mmc5(m) => m.clock_scanline(),
             Self::Axrom(m) => m.clock_scanline(),
             Self::Gxrom(m) => m.clock_scanline(),
@@ -246,7 +272,9 @@ impl Mapper {
             Self::UxRom(m) => m.has_chr_ram(),
             Self::Cnrom(m) => m.has_chr_ram(),
             Self::Mmc1(m) => m.has_chr_ram(),
+            Self::Mmc2(m) => m.has_chr_ram(),
             Self::Mmc3(m) => m.has_chr_ram(),
+            Self::Mmc4(m) => m.has_chr_ram(),
             Self::Mmc5(m) => m.has_chr_ram(),
             Self::Axrom(m) => m.has_chr_ram(),
             Self::Gxrom(m) => m.has_chr_ram(),
@@ -255,13 +283,18 @@ impl Mapper {
     }
 
     pub fn notify_scanline(&mut self, scanline: u16) {
-        if let Self::Mmc5(m) = self {
-            m.notify_scanline(scanline);
+        match self {
+            Self::Mmc2(m) => m.notify_scanline(scanline),
+            Self::Mmc4(m) => m.notify_scanline(scanline),
+            Self::Mmc5(m) => m.notify_scanline(scanline),
+            _ => {}
         }
     }
 
     pub fn nt_mapping(&self) -> u8 {
         match self {
+            Self::Mmc2(m) => m.nt_mapping(),
+            Self::Mmc4(m) => m.nt_mapping(),
             Self::Mmc5(m) => m.nt_mapping(),
             _ => 0xFF,
         }
@@ -269,37 +302,53 @@ impl Mapper {
 
     pub fn read_nt_ext(&mut self, addr: u16, nt_source: u8) -> u8 {
         match self {
+            Self::Mmc2(m) => m.read_nt_ext(addr, nt_source),
+            Self::Mmc4(m) => m.read_nt_ext(addr, nt_source),
             Self::Mmc5(m) => m.read_nt_ext(addr, nt_source),
             _ => 0,
         }
     }
 
     pub fn write_nt_ext(&mut self, addr: u16, nt_source: u8, val: u8) {
-        if let Self::Mmc5(m) = self {
-            m.write_nt_ext(addr, nt_source, val);
+        match self {
+            Self::Mmc2(m) => m.write_nt_ext(addr, nt_source, val),
+            Self::Mmc4(m) => m.write_nt_ext(addr, nt_source, val),
+            Self::Mmc5(m) => m.write_nt_ext(addr, nt_source, val),
+            _ => {}
         }
     }
 
     pub fn set_chr_fetch_bg(&mut self) {
-        if let Self::Mmc5(m) = self {
-            m.set_chr_fetch_bg();
+        match self {
+            Self::Mmc2(m) => m.set_chr_fetch_bg(),
+            Self::Mmc4(m) => m.set_chr_fetch_bg(),
+            Self::Mmc5(m) => m.set_chr_fetch_bg(),
+            _ => {}
         }
     }
 
     pub fn set_chr_fetch_sprite(&mut self) {
-        if let Self::Mmc5(m) = self {
-            m.set_chr_fetch_sprite();
+        match self {
+            Self::Mmc2(m) => m.set_chr_fetch_sprite(),
+            Self::Mmc4(m) => m.set_chr_fetch_sprite(),
+            Self::Mmc5(m) => m.set_chr_fetch_sprite(),
+            _ => {}
         }
     }
 
     pub fn set_extended_chr_bank(&mut self, bank: u8) {
-        if let Self::Mmc5(m) = self {
-            m.set_extended_chr_bank(bank);
+        match self {
+            Self::Mmc2(m) => m.set_extended_chr_bank(bank),
+            Self::Mmc4(m) => m.set_extended_chr_bank(bank),
+            Self::Mmc5(m) => m.set_extended_chr_bank(bank),
+            _ => {}
         }
     }
 
     pub fn get_extended_chr_bank(&self) -> u8 {
         match self {
+            Self::Mmc2(m) => m.get_extended_chr_bank(),
+            Self::Mmc4(m) => m.get_extended_chr_bank(),
             Self::Mmc5(m) => m.get_extended_chr_bank(),
             _ => 0,
         }
@@ -307,6 +356,8 @@ impl Mapper {
 
     pub fn get_ex_ram_mode(&self) -> u8 {
         match self {
+            Self::Mmc2(m) => m.get_ex_ram_mode(),
+            Self::Mmc4(m) => m.get_ex_ram_mode(),
             Self::Mmc5(m) => m.get_ex_ram_mode(),
             _ => 0,
         }
@@ -314,6 +365,8 @@ impl Mapper {
 
     pub fn get_fill_tile(&self) -> u8 {
         match self {
+            Self::Mmc2(m) => m.get_fill_tile(),
+            Self::Mmc4(m) => m.get_fill_tile(),
             Self::Mmc5(m) => m.get_fill_tile(),
             _ => 0,
         }
@@ -321,6 +374,8 @@ impl Mapper {
 
     pub fn get_fill_attr(&self) -> u8 {
         match self {
+            Self::Mmc2(m) => m.get_fill_attr(),
+            Self::Mmc4(m) => m.get_fill_attr(),
             Self::Mmc5(m) => m.get_fill_attr(),
             _ => 0,
         }
@@ -328,6 +383,8 @@ impl Mapper {
 
     pub fn read_ex_ram_byte(&mut self, offset: u16) -> u8 {
         match self {
+            Self::Mmc2(m) => m.read_ex_ram_byte(offset),
+            Self::Mmc4(m) => m.read_ex_ram_byte(offset),
             Self::Mmc5(m) => m.read_ex_ram_byte(offset),
             _ => 0,
         }

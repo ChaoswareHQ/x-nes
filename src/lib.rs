@@ -35,6 +35,7 @@ pub mod clock;
 pub mod cpu;
 
 pub mod controller;
+pub mod debug;
 pub mod interrupt;
 pub mod mapper;
 pub mod ops;
@@ -47,6 +48,9 @@ use ops::{BASE_CYCLES, TABLE};
 
 #[allow(clippy::too_many_lines)]
 pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
+    // Step 0: Service DMC DMA if needed (happens between instructions on real NES)
+    bus.dmc_tick();
+
     let start_cycle = bus.cpu_cycle;
     let mut cycles_extra = 0u8;
 

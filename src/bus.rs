@@ -79,10 +79,10 @@ impl Bus {
                 self.open_bus_val
             }
             _ => {
-                if addr >= 0x6000 {
+                if addr >= 0x4020 {
                     self.mapper.cpu_read(addr)
                 } else if addr >= 0x4000 {
-                    // $4020-$5FFF: open bus range
+                    // $4000-$401F handled above (APU/I/O)
                     self.open_bus_val
                 } else {
                     0
@@ -151,7 +151,9 @@ impl Bus {
                 _ => self.apu.write(addr, val),
             },
             _ => {
-                if addr >= 0x6000 {
+                // Cartridge space: route to mapper for MMC5 registers ($5C00-$5FFF)
+                // and PRG ROM/RAM ($6000+)
+                if addr >= 0x4020 {
                     self.mapper.cpu_write(addr, val);
                 }
             }
