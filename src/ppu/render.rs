@@ -180,16 +180,26 @@ impl Ppu {
             }
         }
 
-        // Generate A12 edges for sprite pattern fetches (real NES PPU does
-        // these during cycles 257-320 of the previous scanline). Each sprite
-        // slot generates 2 CHR reads (pattern low + pattern high) which
-        // clock the MMC3 scanline counter via A12 rising edges.
-        // We read through chr_read() here so that notify_mapper_a12 tracks
-        // A12 state properly for the MMC3 IRQ.
+        /// Generate A12 edges for sprite pattern fetches (real NES PPU does
+        /// these during cycles 257-320 of the previous scanline). Each sprite
+        /// slot generates 2 CHR reads (pattern low + pattern high) which
+        /// clock the MMC3 scanline counter via A12 rising edges.
+        /// We read through chr_read() here so that notify_mapper_a12 tracks
+        /// A12 state properly for the MMC3 IRQ.
+        ///
+        /// The real PPU always accesses 8 sprite slots per scanline, using
+        /// tile $FF for empty slots (dummy fetches). These still generate
+        /// A12 edges and clock the MMC3 counter.
         //
-        // The real PPU always accesses 8 sprite slots per scanline, using
-        // tile $FF for empty slots (dummy fetches). These still generate
-        // A12 edges and clock the MMC3 counter.
+        // Note: The forced notify_mapper_a12(0x0000) between slots is intentionally
+        // omitted. The A12 glitch filter (3-cycle) in notify_mapper_a12 would
+        // suppress edges from forced-low transitions since a12_low_cycles is reset
+        // on every falling edge. Instead we let chr_read() naturally track A12
+        // transitions, which generates exactly 1 rising edge per scanline when
+        // the first sprite pattern is read (A12 goes from background $0000 to
+        // sprite $1000). Subsequent sprite reads keep A12 high, matching the
+        // SJNES reference emulator behavior and producing the correct MMC3 IRQ
+        // timing for games like Super Mario Bros 3.
         for si in 0..8 {
             let tile_addr = if si < self.sprite_count {
                 let idx = self.sprite_indices[si as usize] as usize;
@@ -218,11 +228,10 @@ impl Ppu {
                 // Dummy sprite fetch: tile $FF from sprite pattern table
                 ((self.ctrl & 0x08 != 0) as u16) * 0x1000 | (0xFFu16 << 4)
             };
-            // Simulate A12-low nametable address access between sprite pattern
-            // fetches (real PPU interleaves NT/AT reads with pattern reads).
-            self.notify_mapper_a12(0x0000, mapper);
+            // chr_read tracks A12 via notify_mapper_a12. The first sprite
+            // read with A12=1 (sprite table at $1000) generates a rising edge.
+            // Subsequent reads keep A12 high, so no further edges occur.
             self.chr_read(tile_addr, mapper);
-            self.notify_mapper_a12(0x0000, mapper);
             self.chr_read(tile_addr | 8, mapper);
         }
     }
@@ -230,10 +239,19 @@ impl Ppu {
     /// Fetch next background tile pattern from VRAM.
     /// This triggers mapper CHR reads (needed for MMC3 IRQ timing).
     pub(super) fn fetch_bg_tile(&mut self, mapper: &mut Mapper) {
-        // Notify A12 low before nametable read (simulates address bus transistion
+        // Notify A12 low before nametable read (simulates address bus transition
         // from CHR $0000 region, needed for MMC3 scanline counter rising edges
         // when subsequent pattern reads are at $1000+)
         self.notify_mapper_a12(0x0000, mapper);
+        // Accumulate PPU cycles between the forced A12=0 (simulating NT/AT reads)
+        // and the pattern LSB read. On real NES, NT read is at cycle 1, AT at cycle 3,
+        // pattern LSB at cycle 5 — a 4-cycle gap that passes the MMC3's 3-cycle A12
+        // glitch filter. Without this, a12_low_cycles stays 0 and all background
+        // edges would be suppressed.
+        self.a12_low_cycles = self.a12_low_cycles.saturating_add(4);
+        if self.a12_low_cycles > 255 {
+            self.a12_low_cycles = 255;
+        }
 
         let tile_x = self.v & 0x001F;
         let tile_y = (self.v >> 5) & 0x001F;

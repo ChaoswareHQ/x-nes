@@ -108,6 +108,10 @@ impl Ppu {
             self.t = (self.t & 0xFF00) | val as u16;
             self.v = self.t;
             self.w = 0;
+            // $2006 second write sets v = t immediately.
+            // Sync render_v so on-the-fly renderer sees the new scroll.
+            // fine_x is unchanged (only $2005 first write sets fine_x).
+            self.render_v = self.v;
         }
     }
 

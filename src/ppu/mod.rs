@@ -41,9 +41,9 @@ const CTRL_NMI_ENABLE: u8 = 0x80;
 const V_COARSE_X_MASK: u16 = 0x001F;
 const V_COARSE_Y_MASK: u16 = 0x03E0;
 const V_HORIZONTAL_MASK: u16 = 0x041F; // coarse_x | nt_x (bits 0-4, 10)
-const V_VERTICAL_MASK: u16 = 0x7BE0;   // coarse_y | nt_y | fine_y (bits 5-9, 11, 12-14)
-const V_COARSE_Y_WRAP: u16 = 0x03C0;   // coarse_y = 30
-const V_COARSE_Y_CLAMP: u16 = 0x03E0;  // coarse_y = 31
+const V_VERTICAL_MASK: u16 = 0x7BE0; // coarse_y | nt_y | fine_y (bits 5-9, 11, 12-14)
+const V_COARSE_Y_WRAP: u16 = 0x03C0; // coarse_y = 30
+const V_COARSE_Y_CLAMP: u16 = 0x03E0; // coarse_y = 31
 const V_FINE_Y_OVERFLOW: u16 = 0x7000; // fine_y = 7
 
 // ---------------------------------------------------------------------------
@@ -300,7 +300,6 @@ impl Ppu {
     /// Cycles 1–256: visible rendering + tile fetching + pixel output.
     /// `cy` is the PPU dot being processed (pre-increment value, range 1..256).
     fn cycles_1_to_256(&mut self, cy: u16, mapper: &mut Mapper) {
-
         if self.rendering_enabled() && (cy & 7) == 1 {
             self.fetch_bg_tile(mapper);
             self.increment_coarse_x();
@@ -343,21 +342,17 @@ impl Ppu {
     /// Notify the PPU that address `addr` is on the address bus (for A12 tracking).
     /// MMC3 counts A12 rising edges to clock its scanline counter.
     ///
-    /// Note: The real MMC3 requires A12 low for >= 3 PPU cycles before a rising
-    /// edge counts. However, the x-nes on-the-fly renderer executes tile fetches
-    /// (NT read, AT read, pattern reads) synchronously within a single `tick()`, so
-    /// the cycle counter cannot accumulate between the forced A12-low
-    /// (`notify_mapper_a12(0x0000)`) and the pattern read. We omit the timing guard
-    /// here (matching SJNES behavior) since our simulated bus has no noise that
-    /// could generate false edges.
     fn notify_mapper_a12(&mut self, addr: u16, mapper: &mut Mapper) {
         let a12_new = (addr & 0x1000) != 0;
         if a12_new && !self.prev_a12 {
-            // Rising edge on A12
-            mapper.clock_scanline();
+            // Rising edge on A12 — only count if A12 was low for >= 3 PPU cycles
+            // This filters out glitches from a single cycle-low between pattern reads
+            // in the same tile fetch (attr read → pattern read gap is only 2 cycles).
+            if self.a12_low_cycles >= 3 {
+                mapper.clock_scanline();
+            }
             self.a12_low_cycles = 0;
         } else if !a12_new && self.prev_a12 {
-            // Falling edge on A12
             self.a12_low_cycles = 0;
         }
         self.prev_a12 = a12_new;

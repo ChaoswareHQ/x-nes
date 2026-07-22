@@ -186,9 +186,11 @@ impl MapperImpl for Mmc3 {
                     // $C000: IRQ latch
                     self.irq_latch = val;
                 } else {
-                    // $C001: IRQ reload (reloads latch on next A12 edge)
-                    // Does NOT acknowledge IRQ — only $E000/$E001 clear the flag
-                    self.irq_reload = true;
+                    // $C001: IRQ reload — reloads counter from latch IMMEDIATELY
+                    // (real MMC3 behavior: the counter is updated right away,
+                    // not deferred to the next A12 edge).
+                    self.irq_counter = self.irq_latch;
+                    self.irq_reload = false;
                 }
             }
             0xE000..=0xFFFF => {
