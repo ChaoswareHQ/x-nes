@@ -19,7 +19,7 @@ A lightweight, cycle-accurate NES emulator **library** written in Rust, designed
 > - **Audio** — functional but timing is slightly fast, some tones are off. APU has all 5 channels but needs refinement.
 > - **Graphics** — some games render incorrectly; edge-case PPU behaviors are still being ironed out.
 > - **Mappers** — 10 mappers implemented: NROM, MMC1, UxROM, CNROM, MMC3, MMC5, MMC2 (Punch-Out!!), MMC4 (Fire Emblem), AxROM, GxROM. Covers ~95% of the NES library.
-> - **Accuracy** — passes **86/141** of the AccuracyCoin test suite (61%). Blargg tests: **20/21 pass** (ppu_vbl_nmi fails on NMI timing subtest 5).
+> - **Accuracy** — passes **85/141** of the AccuracyCoin test suite (61%). Blargg tests: **20/21 pass** (ppu_vbl_nmi fails on NMI timing subtest 5).
 >
 > **AccuracyCoin failures by area:**
 >
