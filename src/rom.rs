@@ -1,5 +1,28 @@
+use core::fmt::{Display, Formatter};
+
 use crate::mapper::Mapper;
 use alloc::vec::Vec;
+
+/// Errors that can occur when parsing an iNES ROM.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RomError {
+    /// Not an iNES ROM (missing or wrong magic bytes `NES\x1A`).
+    BadMagic,
+    /// ROM data is too short to contain a valid header.
+    TooShort,
+}
+
+impl Display for RomError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::BadMagic => f.write_str("not an iNES ROM (bad magic)"),
+            Self::TooShort => f.write_str("ROM data too short for header"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for RomError {}
 
 pub struct Rom {
     pub prg: Vec<u8>,
@@ -10,9 +33,19 @@ pub struct Rom {
 }
 
 impl Rom {
-    pub fn new(data: &[u8]) -> Option<Self> {
-        if data.len() < 16 || data[0..4] != [0x4E, 0x45, 0x53, 0x1A] {
-            return None;
+    /// Parse an iNES ROM from raw bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(RomError::BadMagic)` if the data doesn't start with the
+    /// NES magic bytes (`NES\x1A`), or `Err(RomError::TooShort)` if the data
+    /// is shorter than the 16-byte iNES header.
+    pub fn new(data: &[u8]) -> Result<Self, RomError> {
+        if data.len() < 16 {
+            return Err(RomError::TooShort);
+        }
+        if data[0..4] != [0x4E, 0x45, 0x53, 0x1A] {
+            return Err(RomError::BadMagic);
         }
 
         let flags6 = data[6];
@@ -53,7 +86,7 @@ impl Rom {
             data[chr_start..chr_end].to_vec()
         };
 
-        Some(Self {
+        Ok(Self {
             prg,
             chr,
             mapper_id,
@@ -124,13 +157,13 @@ mod tests {
 
     #[test]
     fn invalid_header_rejected() {
-        assert!(Rom::new(b"").is_none());
-        assert!(Rom::new(b"NOPE").is_none());
-        assert!(Rom::new(&[0; 16]).is_none());
+        assert!(Rom::new(b"").is_err());
+        assert!(Rom::new(b"NOPE").is_err());
+        assert!(Rom::new(&[0; 16]).is_err());
         let mut valid = vec![0x4E, 0x45, 0x53, 0x1A, 1, 0, 0, 0];
         valid.resize(16, 0);
         valid.extend(&[0xAB; 0x4000]);
-        assert!(Rom::new(&valid).is_some());
+        assert!(Rom::new(&valid).is_ok());
     }
 
     #[test]

@@ -14,10 +14,8 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
-use nes::bus::Bus;
-use nes::cpu::CpuRp2a03;
+use nes::Emulator;
 use nes::rom::Rom;
-use nes::{reset, tick};
 
 const RESULT_START: u16 = 0x0400;
 const RESULT_END: u16 = 0x0492;
@@ -53,8 +51,7 @@ struct TestResult {
 // ---------------------------------------------------------------------------
 
 struct AccuracyCoinRunner {
-    cpu: CpuRp2a03,
-    bus: Bus,
+    emu: Emulator,
     total_cycles: u64,
     total_frames: u32,
 }
@@ -63,22 +60,18 @@ impl AccuracyCoinRunner {
     fn new(rom_path: &Path) -> Self {
         let data = fs::read(rom_path).expect("failed to read ROM");
         let rom = Rom::new(&data).expect("invalid iNES ROM");
-        let mut cpu = CpuRp2a03::new(0);
-        let mut bus = Bus::new(rom.create_mapper());
-        reset(&mut cpu, &mut bus);
         Self {
-            cpu,
-            bus,
+            emu: Emulator::new(rom.create_mapper()),
             total_cycles: 0,
             total_frames: 0,
         }
     }
 
     fn tick(&mut self) {
-        let cycles = tick(&mut self.cpu, &mut self.bus);
+        let cycles = self.emu.tick();
         self.total_cycles += cycles as u64;
-        if self.bus.ppu.frame_complete {
-            self.bus.ppu.frame_complete = false;
+        if self.emu.bus.ppu.frame_complete {
+            self.emu.bus.ppu.frame_complete = false;
             self.total_frames += 1;
         }
     }
@@ -98,15 +91,15 @@ impl AccuracyCoinRunner {
     }
 
     fn read_ram(&self, addr: u16) -> u8 {
-        self.bus.ram[(addr & 0x07FF) as usize]
+        self.emu.bus.ram[(addr & 0x07FF) as usize]
     }
 
     fn press_start(&mut self) {
-        self.bus.pad1.start = true;
+        self.emu.bus.pad1.set_start(true);
     }
 
     fn release_start(&mut self) {
-        self.bus.pad1.start = false;
+        self.emu.bus.pad1.set_start(false);
     }
 
     fn collect_results(&self) -> Vec<TestResult> {
@@ -541,9 +534,9 @@ fn accuracy_coin_run_cpu_suite() {
 
     // Navigate to first test: the menu cursor starts at index 0 (CPU Instructions).
     // Press A to select it.
-    runner.bus.pad1.a = true;
+    runner.emu.bus.pad1.set_a(true);
     runner.run_frames(1);
-    runner.bus.pad1.a = false;
+    runner.emu.bus.pad1.set_a(false);
 
     // Wait for the test to run and populate results
     runner.run_frames(120);

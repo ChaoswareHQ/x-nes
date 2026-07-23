@@ -1,10 +1,8 @@
 use std::num::NonZeroU32;
 use std::time::{Duration, Instant};
 
-use nes::bus::Bus;
-use nes::cpu::CpuRp2a03;
+use nes::Emulator;
 use nes::rom::Rom;
-use nes::{reset, tick};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use gilrs::{Button, Gilrs};
@@ -63,13 +61,27 @@ fn load_rom(path_or_url: &str) -> Vec<u8> {
         eprintln!("Downloaded {} bytes", data.len());
         data
     } else {
-        std::fs::read(path_or_url).expect("failed to read ROM file")
+        let path = std::path::Path::new(path_or_url);
+        // Try exact path, then tests/<filename> as fallback
+        if let Ok(data) = std::fs::read(path) {
+            return data;
+        }
+        if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+            let alt = std::path::Path::new("tests").join(file_name);
+            if let Ok(data) = std::fs::read(&alt) {
+                return data;
+            }
+            eprintln!("Also tried: '{}'", alt.display());
+        }
+        eprintln!("Could not open '{}'", path_or_url);
+        eprintln!("Place your ROM in the tests/ folder and run:");
+        eprintln!("  cargo run --release --example window -- tests/your-rom.nes");
+        std::process::exit(1);
     }
 }
 
 struct App {
-    cpu: CpuRp2a03,
-    bus: Bus,
+    emu: Emulator,
     window: Option<std::rc::Rc<Window>>,
     ctx: Option<Context<std::rc::Rc<Window>>>,
     surface: Option<Surface<std::rc::Rc<Window>, std::rc::Rc<Window>>>,
@@ -87,15 +99,15 @@ impl App {
     fn new(rom_path: Option<String>) -> Self {
         let path = rom_path.as_deref().unwrap_or(DEFAULT_ROM);
         let data = load_rom(path);
-        let rom = Rom::new(&data).expect("invalid iNES ROM");
+        let rom = Rom::new(&data).unwrap_or_else(|e| {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        });
 
-        let mut cpu = CpuRp2a03::new(0);
-        let mut bus = Bus::new(rom.create_mapper());
-        reset(&mut cpu, &mut bus);
+        let emu = Emulator::new(rom.create_mapper());
 
         Self {
-            cpu,
-            bus,
+            emu,
             gilrs: Gilrs::new().expect("failed to initialize gilrs"),
             window: None,
             ctx: None,
@@ -145,7 +157,7 @@ impl ApplicationHandler for App {
                         eprintln!("Audio config: {}Hz, {} channels", sample_rate, channels);
 
                         // Update APU sample rate to match device
-                        self.bus.apu.set_sample_rate(sample_rate);
+                        self.emu.bus.apu.set_sample_rate(sample_rate);
 
                         // Use a larger ring buffer to tolerate timing jitter
                         let rb = HeapRb::<i16>::new(32768);
@@ -219,16 +231,16 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { event, .. } if !event.repeat => {
                 let pressed = event.state == ElementState::Pressed;
                 match event.physical_key {
-                    PhysicalKey::Code(KeyCode::KeyZ) => self.bus.pad1.b = pressed,
-                    PhysicalKey::Code(KeyCode::KeyX) => self.bus.pad1.a = pressed,
+                    PhysicalKey::Code(KeyCode::KeyZ) => self.emu.bus.pad1.set_b(pressed),
+                    PhysicalKey::Code(KeyCode::KeyX) => self.emu.bus.pad1.set_a(pressed),
                     PhysicalKey::Code(KeyCode::ShiftLeft | KeyCode::ShiftRight) => {
-                        self.bus.pad1.select = pressed
+                        self.emu.bus.pad1.set_select(pressed)
                     }
-                    PhysicalKey::Code(KeyCode::Enter) => self.bus.pad1.start = pressed,
-                    PhysicalKey::Code(KeyCode::ArrowUp) => self.bus.pad1.up = pressed,
-                    PhysicalKey::Code(KeyCode::ArrowDown) => self.bus.pad1.down = pressed,
-                    PhysicalKey::Code(KeyCode::ArrowLeft) => self.bus.pad1.left = pressed,
-                    PhysicalKey::Code(KeyCode::ArrowRight) => self.bus.pad1.right = pressed,
+                    PhysicalKey::Code(KeyCode::Enter) => self.emu.bus.pad1.set_start(pressed),
+                    PhysicalKey::Code(KeyCode::ArrowUp) => self.emu.bus.pad1.set_up(pressed),
+                    PhysicalKey::Code(KeyCode::ArrowDown) => self.emu.bus.pad1.set_down(pressed),
+                    PhysicalKey::Code(KeyCode::ArrowLeft) => self.emu.bus.pad1.set_left(pressed),
+                    PhysicalKey::Code(KeyCode::ArrowRight) => self.emu.bus.pad1.set_right(pressed),
                     _ => {}
                 }
             }
@@ -239,7 +251,7 @@ impl ApplicationHandler for App {
                     let dw = size.width.max(1);
                     let dh = size.height.max(1);
                     let mut buf = vec![0u32; (dw * dh) as usize];
-                    scale_frame(&self.bus.ppu.frame, &mut buf, dw, dh);
+                    scale_frame(&self.emu.bus.ppu.frame, &mut buf, dw, dh);
 
                     if let Ok(mut fb) = surface.buffer_mut() {
                         let slice = fb.as_mut();
@@ -262,25 +274,24 @@ impl ApplicationHandler for App {
             self.acc = Duration::from_millis(100);
         }
 
-        let _ticked = false;
         while self.acc >= self.frame_dur {
-            while !self.bus.ppu.frame_complete {
-                tick(&mut self.cpu, &mut self.bus);
+            while !self.emu.bus.ppu.frame_complete {
+                self.emu.tick();
             }
-            self.bus.ppu.frame_complete = false;
+            self.emu.bus.ppu.frame_complete = false;
             self.acc -= self.frame_dur;
 
             // Push audio samples (discard if buffer full — will log occasionally)
             if let Some(tx) = &mut self.audio_tx {
-                let n = self.bus.apu.sample_count;
+                let n = self.emu.bus.apu.sample_count;
                 if n > 0 {
-                    let pushed = tx.push_slice(&self.bus.apu.audio_samples[..n]);
+                    let pushed = tx.push_slice(&self.emu.bus.apu.audio_samples[..n]);
                     if pushed < n && pushed == 0 {
                         // Buffer full — samples dropped. This should be rare.
                         eprintln!("audio buffer full, dropped {} samples", n);
                     }
                 }
-                self.bus.apu.sample_count = 0;
+                self.emu.bus.apu.sample_count = 0;
             }
         }
 
@@ -295,21 +306,21 @@ impl ApplicationHandler for App {
                 gilrs::EventType::ButtonChanged(button, val, _) => {
                     let pressed = val > 0.5;
                     match button {
-                        Button::South => self.bus.pad1.a = pressed, // A
-                        Button::East => self.bus.pad1.b = pressed,  // B
-                        Button::West => self.bus.pad1.b = pressed,  // X -> B
-                        Button::North => self.bus.pad1.a = pressed, // Y -> A
-                        Button::DPadUp => self.bus.pad1.up = pressed,
-                        Button::DPadDown => self.bus.pad1.down = pressed,
-                        Button::DPadLeft => self.bus.pad1.left = pressed,
-                        Button::DPadRight => self.bus.pad1.right = pressed,
-                        Button::Select => self.bus.pad1.select = pressed,
-                        Button::Start => self.bus.pad1.start = pressed,
+                        Button::South => self.emu.bus.pad1.set_a(pressed), // A
+                        Button::East => self.emu.bus.pad1.set_b(pressed),  // B
+                        Button::West => self.emu.bus.pad1.set_b(pressed),  // X -> B
+                        Button::North => self.emu.bus.pad1.set_a(pressed), // Y -> A
+                        Button::DPadUp => self.emu.bus.pad1.set_up(pressed),
+                        Button::DPadDown => self.emu.bus.pad1.set_down(pressed),
+                        Button::DPadLeft => self.emu.bus.pad1.set_left(pressed),
+                        Button::DPadRight => self.emu.bus.pad1.set_right(pressed),
+                        Button::Select => self.emu.bus.pad1.set_select(pressed),
+                        Button::Start => self.emu.bus.pad1.set_start(pressed),
                         Button::LeftTrigger | Button::RightTrigger => {
-                            self.bus.pad1.a = pressed;
+                            self.emu.bus.pad1.set_a(pressed);
                         }
                         Button::LeftTrigger2 | Button::RightTrigger2 => {
-                            self.bus.pad1.b = pressed;
+                            self.emu.bus.pad1.set_b(pressed);
                         }
                         _ => {}
                     }
