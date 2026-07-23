@@ -276,7 +276,7 @@ impl ApplicationHandler for App {
 
         while self.acc >= self.frame_dur {
             while !self.emu.bus.ppu.frame_complete {
-                self.emu.tick();
+                let _ = self.emu.tick();
             }
             self.emu.bus.ppu.frame_complete = false;
             self.acc -= self.frame_dur;
