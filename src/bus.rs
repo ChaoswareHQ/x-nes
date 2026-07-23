@@ -3,7 +3,6 @@ use crate::controller::Gamepad;
 use crate::mapper::Mapper;
 use crate::ppu::Ppu;
 
-#[allow(dead_code)]
 pub struct Bus {
     pub ram: [u8; 2048],
     pub mapper: Mapper,
@@ -11,19 +10,11 @@ pub struct Bus {
     pub apu: Apu,
     pub pad1: Gamepad,
     pub pad2: Gamepad,
-    /// Tracks last value on the data bus for open bus reads
     open_bus_val: u8,
-    /// Set to true when DMC DMA fires between instructions
-    /// Used by SHA/SHS/SHY/SHX to know if H should be ignored
     pub dmc_just_fired: bool,
-    /// Global CPU cycle counter (incremented each bus access)
     pub cpu_cycle: u64,
-    /// Last CPU cycle the PPU was synced to
     ppu_sync_cycle: u64,
-    /// CPU cycle at which to sample NMI latch (penultimate cycle of instruction)
     pub penultimate_sample_cycle: u64,
-    /// Per-access DMC ticks applied during current SH instruction.
-    /// Incremented by SH instructions after each bus access.
     pub dmc_ticks: u16,
 }
 
@@ -45,9 +36,6 @@ impl Bus {
         }
     }
 
-    /// Advance PPU to catch up to the current `cpu_cycle`.
-    /// Each CPU cycle = 3 PPU dots. This only advances the PPU
-    /// for cycles that haven't been synced yet.
     #[inline(always)]
     pub fn catch_up_ppu(&mut self) {
         if self.cpu_cycle > self.ppu_sync_cycle {
@@ -64,11 +52,8 @@ impl Bus {
             0 | 1 => self.ram[(addr & 0x07FF) as usize],
             2 | 3 => self.read_ppu(addr),
             4 if addr < 0x4018 => match addr {
-                // $4015 returns APU status, but bit 5 is open bus (from data bus)
                 0x4015 => self.apu.read(addr) | (self.open_bus_val & 0x20),
                 0x4016 => (self.pad1.read() & 0x01) | (self.open_bus_val & 0xFE),
-                // $4017 reads Famicom controller 2 (also NES expansion port)
-                // Bit 0 = controller 2 data, bits 1-7 = open bus
                 0x4017 => (self.pad2.read() & 0x01) | (self.open_bus_val & 0xFE),
                 // $4000-$4014 ($4015 handled above) are write-only APU registers
                 // Reading write-only APU registers returns open bus

@@ -1,246 +1,283 @@
 use crate::bus::Bus;
 use crate::cpu::{CpuRp2a03, FLAG_CARRY, FLAG_OVERFLOW, FLAG_ZERO};
-use crate::ops::addr_modes;
 
-pub fn and_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let val = bus.read(cpu.pc()) & cpu.a();
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+// ---- AND ----
+
+op_read!(
+    and_imm,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() & op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    imm,
     2
-}
-
-pub fn and_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) & cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    and_zp,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() & op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    zp,
     3
-}
-
-pub fn and_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zpx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) & cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    and_zpx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() & op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    zpx,
     4
-}
-
-pub fn and_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr) & cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    and_abs,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() & op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    abs,
     4
-}
-
-pub fn and_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr) & cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-    4 + page
-}
-
-pub fn and_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr) & cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-    4 + page
-}
-
-pub fn and_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::indx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) & cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    and_absx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() & op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    absx,
+    4
+);
+op_read!(
+    and_absy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() & op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    absy,
+    4
+);
+op_read!(
+    and_indx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() & op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    indx,
     6
-}
+);
+op_read!(
+    and_indy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() & op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    indy,
+    5
+);
 
-pub fn and_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::indy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) & cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-    5 + page
-}
+// ---- ORA ----
 
-pub fn ora_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let val = bus.read(cpu.pc()) | cpu.a();
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+op_read!(
+    ora_imm,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() | op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    imm,
     2
-}
-
-pub fn ora_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) | cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    ora_zp,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() | op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    zp,
     3
-}
-
-pub fn ora_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zpx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) | cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    ora_zpx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() | op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    zpx,
     4
-}
-
-pub fn ora_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr) | cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    ora_abs,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() | op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    abs,
     4
-}
-
-pub fn ora_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr) | cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-    4 + page
-}
-
-pub fn ora_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr) | cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-    4 + page
-}
-
-pub fn ora_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::indx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) | cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    ora_absx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() | op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    absx,
+    4
+);
+op_read!(
+    ora_absy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() | op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    absy,
+    4
+);
+op_read!(
+    ora_indx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() | op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    indx,
     6
-}
+);
+op_read!(
+    ora_indy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() | op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    indy,
+    5
+);
 
-pub fn ora_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::indy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) | cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-    5 + page
-}
+// ---- EOR ----
 
-pub fn eor_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let val = bus.read(cpu.pc()) ^ cpu.a();
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+op_read!(
+    eor_imm,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() ^ op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    imm,
     2
-}
-
-pub fn eor_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) ^ cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    eor_zp,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() ^ op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    zp,
     3
-}
-
-pub fn eor_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zpx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) ^ cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    eor_zpx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() ^ op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    zpx,
     4
-}
-
-pub fn eor_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr) ^ cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    eor_abs,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() ^ op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    abs,
     4
-}
-
-pub fn eor_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr) ^ cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-    4 + page
-}
-
-pub fn eor_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let val = bus.read(addr) ^ cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-    4 + page
-}
-
-pub fn eor_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::indx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) ^ cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
+);
+op_read!(
+    eor_absx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() ^ op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    absx,
+    4
+);
+op_read!(
+    eor_absy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() ^ op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    absy,
+    4
+);
+op_read!(
+    eor_indx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() ^ op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    indx,
     6
-}
+);
+op_read!(
+    eor_indy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        let v = cpu.a() ^ op;
+        cpu.set_a(v);
+        cpu.set_sign(v);
+        cpu.set_zero(v);
+    },
+    indy,
+    5
+);
 
-pub fn eor_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::indy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let val = bus.read(addr) ^ cpu.a();
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-    5 + page
-}
+// ---- BIT ----
 
 pub fn bit_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
+    let addr = crate::ops::addr_modes::zp(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let val = bus.read(addr);
     cpu.set_sign(val);
@@ -250,7 +287,7 @@ pub fn bit_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
 }
 
 pub fn bit_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
+    let addr = crate::ops::addr_modes::abs(cpu, bus);
     cpu.set_pc(cpu.pc().wrapping_add(2));
     let val = bus.read(addr);
     cpu.set_sign(val);
@@ -260,6 +297,7 @@ pub fn bit_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
 }
 
 // ---- ANC (AND with A, then copy N flag to C) ----
+
 pub fn anc_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let val = bus.read(cpu.pc()) & cpu.a();
     cpu.set_pc(cpu.pc().wrapping_add(1));
@@ -271,6 +309,7 @@ pub fn anc_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
 }
 
 // ---- ANE (A = (A | constant) & X & operand) ----
+
 pub fn ane_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let operand = bus.read(cpu.pc());
     cpu.set_pc(cpu.pc().wrapping_add(1));
@@ -282,6 +321,7 @@ pub fn ane_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
 }
 
 // ---- LXA (A = (A | constant) & operand, X = A) ----
+
 pub fn lxa_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     let operand = bus.read(cpu.pc());
     cpu.set_pc(cpu.pc().wrapping_add(1));

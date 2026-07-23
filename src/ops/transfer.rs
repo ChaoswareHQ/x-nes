@@ -1,244 +1,218 @@
 use crate::bus::Bus;
 use crate::cpu::CpuRp2a03;
-use crate::ops::addr_modes;
 
-fn lda_inner(cpu: &mut CpuRp2a03, val: u8) {
-    cpu.set_a(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-}
+// ---- LDA ----
 
-pub fn lda_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let val = bus.read(cpu.pc());
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    lda_inner(cpu, val);
+op_read!(
+    lda_imm,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_a(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    imm,
     2
-}
-
-pub fn lda_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    lda_inner(cpu, bus.read(addr));
+);
+op_read!(
+    lda_zp,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_a(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    zp,
     3
-}
-
-pub fn lda_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zpx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    lda_inner(cpu, bus.read(addr));
+);
+op_read!(
+    lda_zpx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_a(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    zpx,
     4
-}
-
-pub fn lda_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    lda_inner(cpu, bus.read(addr));
+);
+op_read!(
+    lda_abs,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_a(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    abs,
     4
-}
-
-pub fn lda_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    lda_inner(cpu, bus.read(addr));
-    4 + page
-}
-
-pub fn lda_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    lda_inner(cpu, bus.read(addr));
-    4 + page
-}
-
-pub fn lda_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::indx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    lda_inner(cpu, bus.read(addr));
+);
+op_read!(
+    lda_absx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_a(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    absx,
+    4
+);
+op_read!(
+    lda_absy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_a(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    absy,
+    4
+);
+op_read!(
+    lda_indx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_a(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    indx,
     6
-}
-
-pub fn lda_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::indy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    lda_inner(cpu, bus.read(addr));
-    5 + page
-}
-
-pub fn sta_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    bus.write(addr, cpu.a());
-    3
-}
-
-pub fn sta_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zpx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    bus.write(addr, cpu.a());
-    4
-}
-
-pub fn sta_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    bus.write(addr, cpu.a());
-    4
-}
-
-pub fn sta_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, _page) = addr_modes::absx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let _ = bus.read(addr); // Dummy read before write
-    bus.write(addr, cpu.a());
+);
+op_read!(
+    lda_indy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_a(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    indy,
     5
-}
+);
 
-pub fn sta_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, _) = addr_modes::absy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    let _ = bus.read(addr); // Dummy read before write
-    bus.write(addr, cpu.a());
-    5
-}
+// ---- STA ----
 
-pub fn sta_indx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::indx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    bus.write(addr, cpu.a());
-    6
-}
+op_store!(sta_zp, a, zp, 3);
+op_store!(sta_zpx, a, zpx, 4);
+op_store!(sta_abs, a, abs, 4);
+op_store!(sta_absx, a, absx, 5);
+op_store!(sta_absy, a, absy, 5);
+op_store!(sta_indx, a, indx, 6);
+op_store!(sta_indy, a, indy, 6);
 
-pub fn sta_indy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, _) = addr_modes::indy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    let _ = bus.read(addr); // Dummy read before write
-    bus.write(addr, cpu.a());
-    6
-}
+// ---- LDX ----
 
-fn ldx_inner(cpu: &mut CpuRp2a03, val: u8) {
-    cpu.set_x(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-}
-
-pub fn ldx_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let val = bus.read(cpu.pc());
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    ldx_inner(cpu, val);
+op_read!(
+    ldx_imm,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_x(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    imm,
     2
-}
-
-pub fn ldx_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    ldx_inner(cpu, bus.read(addr));
+);
+op_read!(
+    ldx_zp,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_x(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    zp,
     3
-}
-
-pub fn ldx_zpy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zpy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    ldx_inner(cpu, bus.read(addr));
+);
+op_read!(
+    ldx_zpy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_x(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    zpy,
     4
-}
-
-pub fn ldx_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    ldx_inner(cpu, bus.read(addr));
+);
+op_read!(
+    ldx_abs,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_x(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    abs,
     4
-}
+);
+op_read!(
+    ldx_absy,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_x(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    absy,
+    4
+);
 
-pub fn ldx_absy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    ldx_inner(cpu, bus.read(addr));
-    4 + page
-}
+// ---- LDY ----
 
-fn ldy_inner(cpu: &mut CpuRp2a03, val: u8) {
-    cpu.set_y(val);
-    cpu.set_sign(val);
-    cpu.set_zero(val);
-}
-
-pub fn ldy_imm(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let val = bus.read(cpu.pc());
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    ldy_inner(cpu, val);
+op_read!(
+    ldy_imm,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_y(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    imm,
     2
-}
-
-pub fn ldy_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    ldy_inner(cpu, bus.read(addr));
+);
+op_read!(
+    ldy_zp,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_y(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    zp,
     3
-}
-
-pub fn ldy_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zpx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    ldy_inner(cpu, bus.read(addr));
+);
+op_read!(
+    ldy_zpx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_y(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    zpx,
     4
-}
-
-pub fn ldy_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    ldy_inner(cpu, bus.read(addr));
+);
+op_read!(
+    ldy_abs,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_y(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    abs,
     4
-}
-
-pub fn ldy_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let (addr, page) = addr_modes::absx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    ldy_inner(cpu, bus.read(addr));
-    4 + page
-}
-
-pub fn stx_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    bus.write(addr, cpu.x());
-    3
-}
-
-pub fn stx_zpy(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zpy(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    bus.write(addr, cpu.x());
+);
+op_read!(
+    ldy_absx,
+    |cpu: &mut CpuRp2a03, op: u8| {
+        cpu.set_y(op);
+        cpu.set_sign(op);
+        cpu.set_zero(op);
+    },
+    absx,
     4
-}
+);
 
-pub fn stx_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    bus.write(addr, cpu.x());
-    4
-}
+// ---- STX ----
 
-pub fn sty_zp(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zp(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    bus.write(addr, cpu.y());
-    3
-}
+op_store!(stx_zp, x, zp, 3);
+op_store!(stx_zpy, x, zpy, 4);
+op_store!(stx_abs, x, abs, 4);
 
-pub fn sty_zpx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::zpx(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(1));
-    bus.write(addr, cpu.y());
-    4
-}
+// ---- STY ----
 
-pub fn sty_abs(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    let addr = addr_modes::abs(cpu, bus);
-    cpu.set_pc(cpu.pc().wrapping_add(2));
-    bus.write(addr, cpu.y());
-    4
-}
+op_store!(sty_zp, y, zp, 3);
+op_store!(sty_zpx, y, zpx, 4);
+op_store!(sty_abs, y, abs, 4);
+
+// ---- Register Transfers ----
 
 pub fn tax(cpu: &mut CpuRp2a03, _bus: &mut Bus) -> u8 {
     let val = cpu.a();

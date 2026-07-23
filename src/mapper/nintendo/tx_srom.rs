@@ -11,7 +11,6 @@ use alloc::vec::Vec;
 pub struct TxSRom {
     prg: Vec<u8>,
     chr: common::ChrBanked, // 8 slots, 1 KB each
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     // Bank select

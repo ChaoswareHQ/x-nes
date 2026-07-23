@@ -4,7 +4,6 @@ use alloc::vec::Vec;
 pub struct Axrom {
     prg: Vec<u8>,
     chr: [u8; 0x2000],
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     bank: u8,

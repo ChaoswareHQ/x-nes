@@ -25,7 +25,6 @@ pub enum Vrc6Type {
 pub struct Vrc6 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     /// VRC6 variant.
@@ -39,7 +38,6 @@ pub struct Vrc6 {
 
     // IRQ
     irq: ScanlineIrq,
-    #[allow(dead_code)]
     irq_ack_reload: bool,
     prev_a12: bool,
 }

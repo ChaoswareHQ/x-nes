@@ -1,11 +1,9 @@
 use crate::mapper::MapperImpl;
 use alloc::vec::Vec;
 
-#[allow(dead_code)]
 pub struct Mmc3 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     // Bank select
@@ -53,12 +51,10 @@ impl Mmc3 {
         }
     }
 
-    #[allow(dead_code)]
     fn prg_bank_count(&self) -> u8 {
         (self.prg.len() / 0x2000) as u8
     }
 
-    #[allow(dead_code)]
     fn chr_bank_count(&self) -> u8 {
         if self.chr.is_empty() {
             return 1;
@@ -66,7 +62,6 @@ impl Mmc3 {
         (self.chr.len() / 0x200) as u8
     }
 
-    #[allow(dead_code)]
     fn chr_addr(&self, bank: u8, off: u16) -> u16 {
         let b = (bank as usize) * 0x200 + (off as usize) % 0x200;
         if self.chr.is_empty() {

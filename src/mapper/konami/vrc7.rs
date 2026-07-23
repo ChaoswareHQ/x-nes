@@ -13,7 +13,6 @@ use crate::mapper::common::mirror;
 pub struct Vrc7 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
 
@@ -26,7 +25,6 @@ pub struct Vrc7 {
     // IRQ
     irq: ScanlineIrq,
     prev_a12: bool,
-    #[allow(dead_code)]
     irq_ack_reload: bool,
 }
 

@@ -1,11 +1,9 @@
 use crate::mapper::MapperImpl;
 use alloc::vec::Vec;
 
-#[allow(dead_code)]
 pub struct Mmc5 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
 

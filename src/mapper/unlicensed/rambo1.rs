@@ -4,7 +4,6 @@ use alloc::vec::Vec;
 pub struct Rambo1 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     prg_banks: [u8; 4],
@@ -43,7 +42,6 @@ impl Rambo1 {
         (self.prg.len() / 0x2000).max(1) as u8
     }
 
-    #[allow(dead_code)]
     fn chr_bank_count(&self) -> u8 {
         if self.chr.is_empty() {
             return 1;

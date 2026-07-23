@@ -9,7 +9,6 @@ use super::super::MapperImpl;
 pub struct Vrc3 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     prg_bank: u8, // 16 KB bank number for $8000

@@ -11,7 +11,6 @@ use alloc::vec::Vec;
 pub struct CpRom {
     prg: Vec<u8>,
     chr: common::ChrMem, // bank_size = 0x0800 (2 KB)
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     chr_bank_lo: u8, // bits 0-2: 2 KB bank for PPU $0000-$07FF

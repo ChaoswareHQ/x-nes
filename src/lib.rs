@@ -45,6 +45,7 @@ use mapper::Mapper;
 use ops::{BASE_CYCLES, TABLE};
 
 #[allow(clippy::too_many_lines)]
+#[must_use]
 pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
     bus.dmc_tick();
 
@@ -153,10 +154,6 @@ pub fn reset(cpu: &mut CpuRp2a03, bus: &mut Bus) {
     *cpu = CpuRp2a03::new(lo | (hi << 8));
 }
 
-// ---------------------------------------------------------------------------
-// Emulator — high-level convenience wrapper
-// ---------------------------------------------------------------------------
-
 /// High-level NES emulator that owns the CPU and Bus together.
 ///
 /// This is the recommended entry point for most users.
@@ -178,7 +175,8 @@ impl Emulator {
 
     /// Execute one CPU instruction, advancing the system state.
     /// Returns the number of CPU cycles consumed by this instruction.
-    #[inline(always)]
+    #[inline]
+    #[must_use]
     pub fn tick(&mut self) -> u8 {
         tick(&mut self.cpu, &mut self.bus)
     }

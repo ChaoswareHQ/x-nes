@@ -14,7 +14,6 @@ use alloc::vec::Vec;
 pub struct H3001 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     // Bank select
@@ -55,7 +54,6 @@ impl H3001 {
         }
     }
 
-    #[allow(dead_code)]
     fn prg_bank_count(&self) -> u8 {
         if self.prg.is_empty() {
             1
@@ -64,7 +62,6 @@ impl H3001 {
         }
     }
 
-    #[allow(dead_code)]
     fn chr_bank_count(&self) -> u16 {
         if self.chr.is_empty() {
             1

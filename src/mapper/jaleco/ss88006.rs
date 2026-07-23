@@ -25,7 +25,6 @@ use alloc::vec::Vec;
 pub struct Ss88006 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     /// CHR 1 KB bank selects (8 slots for PPU $0000-$1FFF)

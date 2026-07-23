@@ -4,7 +4,6 @@ use core::cmp;
 pub struct Nrom {
     prg: [u8; 0x8000],
     chr: [u8; 0x2000],
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     prg_size: usize,

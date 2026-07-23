@@ -42,92 +42,92 @@ impl CpuRp2a03 {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn pc(&self) -> u16 {
         self.pc
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn set_pc(&mut self, val: u16) {
         self.pc = val;
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn advance_pc(&mut self, n: u16) {
         self.pc = self.pc.wrapping_add(n);
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn a(&self) -> u8 {
         self.a
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn set_a(&mut self, val: u8) {
         self.a = val;
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn x(&self) -> u8 {
         self.x
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn set_x(&mut self, val: u8) {
         self.x = val;
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn y(&self) -> u8 {
         self.y
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn set_y(&mut self, val: u8) {
         self.y = val;
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn st(&self) -> u8 {
         self.st
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn set_st(&mut self, val: u8) {
         self.st = val;
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn sr(&self) -> u8 {
         self.sr
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn set_sr(&mut self, val: u8) {
         self.sr = val;
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_flag(&self, flag: u8) -> bool {
         self.sr & flag != 0
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn set_flag(&mut self, flag: u8, set: bool) {
         self.sr = (self.sr & !flag) | (flag & (set as u8).wrapping_neg());
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn set_sign(&mut self, val: u8) {
         self.set_flag(FLAG_NEGATIVE, (val & 0x80) != 0);
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn set_zero(&mut self, val: u8) {
         self.set_flag(FLAG_ZERO, val == 0);
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn update_zn_flags(&mut self, val: u8) {
         let z = (val == 0) as u8;
         self.sr = (self.sr & 0x7D) | (z.wrapping_neg() & FLAG_ZERO) | (val & FLAG_NEGATIVE);

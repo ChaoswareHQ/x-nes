@@ -33,7 +33,6 @@ use alloc::vec::Vec;
 pub struct Namco163 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     /// 128 internal 8-bit registers (only 0x00-0x0F and 0x7C-0x7F actively used here)

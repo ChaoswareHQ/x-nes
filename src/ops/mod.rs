@@ -1,7 +1,10 @@
 use crate::bus::Bus;
 use crate::cpu::CpuRp2a03;
 
-type Op = fn(&mut CpuRp2a03, &mut Bus) -> u8;
+pub(crate) type Op = fn(&mut CpuRp2a03, &mut Bus) -> u8;
+
+#[macro_use]
+mod macros;
 
 #[inline(always)]
 pub(crate) fn push(cpu: &mut CpuRp2a03, bus: &mut Bus, val: u8) {

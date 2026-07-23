@@ -44,8 +44,3 @@ pub fn nop_absx(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
 pub fn nop(_cpu: &mut CpuRp2a03, _bus: &mut Bus) -> u8 {
     2
 }
-
-#[allow(dead_code)]
-pub fn illegal(_cpu: &mut CpuRp2a03, _bus: &mut Bus) -> u8 {
-    2
-}

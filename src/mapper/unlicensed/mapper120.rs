@@ -3,7 +3,6 @@ use alloc::vec::Vec;
 
 pub struct Mapper120 {
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
 }

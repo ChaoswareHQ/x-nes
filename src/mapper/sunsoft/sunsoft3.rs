@@ -17,7 +17,6 @@ use alloc::vec::Vec;
 pub struct Sunsoft3 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     chr_banks: [u8; 4], // 2KB banks at PPU $0000, $0800, $1000, $1800

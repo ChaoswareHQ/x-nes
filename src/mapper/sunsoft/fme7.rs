@@ -30,7 +30,6 @@ use alloc::vec::Vec;
 pub struct Fme7 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     // Register select

@@ -27,7 +27,6 @@ use alloc::vec::Vec;
 pub struct Tc0690 {
     prg: Vec<u8>,
     chr: Vec<u8>,
-    #[allow(dead_code)]
     chr_ram: bool,
     mirror: u8,
     /// CHR 1 KB bank selects for PPU $0000-$07FF (2 selectable slots)
