@@ -264,9 +264,6 @@ impl Ppu {
     pub(super) fn fetch_bg_tile(&mut self, mapper: &mut Mapper) {
         mapper.set_chr_fetch_bg();
 
-        self.notify_mapper_a12(0x0000, mapper);
-        self.a12_low_cycles = self.a12_low_cycles.saturating_add(4);
-
         let tile_x = self.v & 0x001F;
         let tile_y = (self.v >> 5) & 0x001F;
         let fine_y = (self.v >> 12) & 0x0007;
@@ -285,6 +282,10 @@ impl Ppu {
     ) -> (u8, u8, u8, u8) {
         let nt_base = 0x2000 | (nt << 10);
         let nt_addr = nt_base | (tile_y << 5) | tile_x;
+        // Real PPU bus: NT read puts A12=1 on the address bus.
+        // This matters for MMC3 A12 edge detection (it generates the rising edge
+        // that the MMC3 counts to clock its scanline counter).
+        self.notify_mapper_a12(nt_addr, mapper);
         let nt_byte = self.ppu_read_nt(nt_addr, mapper);
 
         // MMC5 ExRAM mode 1: set extended CHR bank for background tile fetches
@@ -295,10 +296,11 @@ impl Ppu {
             mapper.set_extended_chr_bank(exram_byte);
         }
 
-        let attr = self.ppu_read_nt(
-            nt_base | 0x03C0 | ((tile_y >> 2) << 3) | (tile_x >> 2),
-            mapper,
-        );
+        let attr_addr = nt_base | 0x03C0 | ((tile_y >> 2) << 3) | (tile_x >> 2);
+        // Attribute read: also A12=1 (same as NT, no new rising edge).
+        // Still notify to let the MMC3 glitch filter track A12 properly.
+        self.notify_mapper_a12(attr_addr, mapper);
+        let attr = self.ppu_read_nt(attr_addr, mapper);
         let attr_shift = ((tile_x & 2) >> 1) | ((tile_y & 2) << 1);
         let attr_bits = (attr >> attr_shift) & 3;
         let bg_table = if self.ctrl & 0x10 != 0 {

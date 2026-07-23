@@ -8,14 +8,10 @@ impl Ppu {
         self.status &= !0x80;
         self.w = 0;
         let result = (s & 0xE0) | (self.get_open_bus() & 0x1F);
-        // $2002 read does NOT reset the open bus decay timer
         self.last_bus_value = result;
-        // VBlank suppression: if $2002 is read on the same PPU cycle that
-        // VBlank would be set (scanline 241, cycle 1), the VBlank is suppressed.
         if self.scanline == VBLANK_START && self.cycle == 1 && (s & 0x80) == 0 {
             self.vbl_suppressed = true;
         }
-        // Update NMI edge detection (clearing VBlank - not from VBlank start)
         self.update_nmi_edge(false);
         result
     }
@@ -30,7 +26,6 @@ impl Ppu {
         let result = if addr < 0x3F00 {
             self.data_buffer
         } else {
-            // Palette read: high bits from open bus (decayed), low bits from palette
             (self.get_open_bus() & 0xC0) | (val & 0x3F)
         };
         if addr < 0x3F00 {
@@ -38,7 +33,6 @@ impl Ppu {
         } else {
             self.data_buffer = self.ppu_read_nt(addr & 0x2FFF, mapper);
         }
-        // $2007 reads DO refresh the bus (unlike $2002)
         self.set_last_bus_value(result);
         self.v = self
             .v
@@ -50,11 +44,7 @@ impl Ppu {
         self.set_last_bus_value(val);
         self.ctrl = val;
         self.t = (self.t & 0xF3FF) | ((val as u16 & 3) << 10);
-        // Update NMI edge detection. $2000 writes are from_vblank=false
-        // so nmi_from_vblank is NOT set. The NMI from $2000 writes is
-        // deferred to the next instruction (penultimate-cycle rule).
         self.update_nmi_edge(false);
-        // If NMI is being disabled, clear the latch (NMI line goes high)
         if val & 0x80 == 0 {
             self.nmi_latched = false;
         }

@@ -47,19 +47,16 @@ use ops::{BASE_CYCLES, TABLE};
 
 #[allow(clippy::too_many_lines)]
 pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
-    // Step 0: Service DMC DMA if needed (happens between instructions on real NES)
     bus.dmc_tick();
 
     let start_cycle = bus.cpu_cycle;
     let mut cycles_extra = 0u8;
 
-    // Step 1: Set up penultimate cycle sampling point.
     let opcode = bus.read(cpu.pc());
     cpu.set_pc(cpu.pc().wrapping_add(1));
     let base_cycles = BASE_CYCLES[opcode as usize] as u64;
     bus.penultimate_sample_cycle = start_cycle + base_cycles.saturating_sub(2);
 
-    // Save I flag for CLI/SEI one-instruction latency
     let is_cli_sei = opcode == 0x58 || opcode == 0x78;
     let i_flag_for_irq = if is_cli_sei {
         cpu.get_flag(FLAG_INTERRUPT)
@@ -67,9 +64,6 @@ pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
         false
     };
 
-    // Pre-tick APU by base cycles
-    // For SH instructions: save DMC state first - we'll restore it so the
-    // instruction can tick DMC per bus access for accurate mid-instruction timing.
     let is_sh =
         opcode == 0x93 || opcode == 0x9B || opcode == 0x9C || opcode == 0x9E || opcode == 0x9F;
     let dmc_saved = if is_sh {
@@ -82,27 +76,22 @@ pub fn tick(cpu: &mut CpuRp2a03, bus: &mut Bus) -> u8 {
         bus.dmc_just_fired = true;
     }
 
-    // For SH instructions: restore DMC to pre-pre-tick state so per-access
-    // DMC ticking in the instruction function is the sole source of DMC ticks.
     if let Some(ref saved) = dmc_saved {
         bus.apu.restore_dmc(saved);
         bus.dmc_ticks = 0;
     }
 
-    // Execute instruction (each bus access samples penultimate)
     let cycles = TABLE[opcode as usize](cpu, bus) as u64;
 
-    // Step 2: Sync PPU for remaining internal cycles
     bus.cpu_cycle = start_cycle + cycles;
     bus.catch_up_ppu();
 
-    // Tick remaining APU cycles
     if cycles > base_cycles {
         bus.apu.tick_without_dmc((cycles - base_cycles) as u16);
     }
 
     if is_sh {
-        bus.apu.tick_dmc(); // opcode fetch cycle
+        bus.apu.tick_dmc();
         let applied = 1u64 + bus.dmc_ticks as u64;
         let total = 1u64 + cycles;
         if total > applied {
@@ -163,10 +152,4 @@ pub fn reset(cpu: &mut CpuRp2a03, bus: &mut Bus) {
     let lo = bus.read(0xFFFC) as u16;
     let hi = bus.read(0xFFFD) as u16;
     *cpu = CpuRp2a03::new(lo | (hi << 8));
-}
-
-#[cfg(not(any(test, feature = "std")))]
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    loop {}
 }

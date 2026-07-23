@@ -45,8 +45,8 @@ impl Mmc2 {
             prg_bank: 0,
             chr_bank_0: [0, 0],
             chr_bank_1: [0, 0],
-            latch_0: 0,
-            latch_1: 0,
+            latch_0: 1,
+            latch_1: 1,
         }
     }
 
@@ -110,6 +110,11 @@ impl MapperImpl for Mmc2 {
             return self.chr[a as usize];
         }
 
+        // Save old latch values — the current read uses the OLD latch;
+        // the change takes effect on the NEXT read (real MMC2/MMC4 behavior).
+        let old_latch_0 = self.latch_0;
+        let old_latch_1 = self.latch_1;
+
         // CHR latching:
         // PPU $0FD8-$0FDF → latch_0 = 0
         // PPU $0FE8-$0FEF → latch_0 = 1
@@ -124,9 +129,9 @@ impl MapperImpl for Mmc2 {
         }
 
         let bank = if a < 0x1000 {
-            self.chr_bank_0[self.latch_0 as usize] as usize
+            self.chr_bank_0[old_latch_0 as usize] as usize
         } else {
-            self.chr_bank_1[self.latch_1 as usize] as usize
+            self.chr_bank_1[old_latch_1 as usize] as usize
         };
 
         let idx = (bank * 0x1000 + (a as usize & 0xFFF)) % self.chr.len();

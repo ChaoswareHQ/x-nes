@@ -81,12 +81,9 @@ impl MapperImpl for Mmc4 {
     fn cpu_write(&mut self, addr: u16, val: u8) {
         match addr {
             0x8000..=0x9FFF => {
-                // Even/odd address: A0=0 stores low nibble, A0=1 stores high nibble
-                if addr & 1 == 0 {
-                    self.prg_bank = (self.prg_bank & 0xF0) | (val & 0x0F);
-                } else {
-                    self.prg_bank = (self.prg_bank & 0x0F) | ((val & 0x0F) << 4);
-                }
+                // MMC4: 4-bit PRG bank register at $8000-$9FFF
+                // Both even and odd addresses write the same register
+                self.prg_bank = val & 0x0F;
             }
             0xA000..=0xAFFF => {
                 self.chr_bank_0[(addr & 1) as usize] = val;
@@ -107,7 +104,13 @@ impl MapperImpl for Mmc4 {
             return self.chr[a as usize];
         }
 
-        // Same CHR latching as MMC2
+        // Save old latch values before updating — the current read uses the
+        // OLD latch; the change takes effect on the NEXT read (real NES behavior).
+        let old_latch_0 = self.latch_0;
+        let old_latch_1 = self.latch_1;
+
+        // MMC2/MMC4 CHR latching: PPU address watches switch which CHR bank
+        // is used for subsequent reads.
         match a {
             0x0FD8..=0x0FDF => self.latch_0 = 0,
             0x0FE8..=0x0FEF => self.latch_0 = 1,
@@ -117,9 +120,9 @@ impl MapperImpl for Mmc4 {
         }
 
         let bank = if a < 0x1000 {
-            self.chr_bank_0[self.latch_0 as usize] as usize
+            self.chr_bank_0[old_latch_0 as usize] as usize
         } else {
-            self.chr_bank_1[self.latch_1 as usize] as usize
+            self.chr_bank_1[old_latch_1 as usize] as usize
         };
 
         let idx = (bank * 0x1000 + (a as usize & 0xFFF)) % self.chr.len();
