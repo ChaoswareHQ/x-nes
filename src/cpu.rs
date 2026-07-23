@@ -6,6 +6,11 @@ pub const FLAG_BREAK: u8 = 0b0001_0000;
 pub const FLAG_OVERFLOW: u8 = 0b0100_0000;
 pub const FLAG_NEGATIVE: u8 = 0b1000_0000;
 
+/// Interrupt vector addresses (CPU memory map).
+pub const NMI_VECTOR: u16 = 0xFFFA;
+pub const RESET_VECTOR: u16 = 0xFFFC;
+pub const IRQ_VECTOR: u16 = 0xFFFE;
+
 /// RP2A03 CPU register file.
 ///
 /// Layout (repr(C), 8 bytes):

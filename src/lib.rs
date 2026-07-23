@@ -32,7 +32,7 @@ pub mod apu;
 pub mod bus;
 pub mod controller;
 pub mod cpu;
-pub mod interrupt;
+
 pub mod mapper;
 pub mod ops;
 pub mod ppu;
